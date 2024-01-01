@@ -1,0 +1,1 @@
+class AuthManager:\n    pass
