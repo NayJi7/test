@@ -1,1 +1,1 @@
-def dashboard():\n    return 'dashboard'
+def dashboard():\n    return {'charts': True, 'stats': True}
