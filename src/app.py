@@ -1,1 +1,1 @@
-print('initial app')
+print('main application entry point')
