@@ -46,3 +46,8 @@ class Server:
     def __repr__(self):
         status = "running" if self._running else "stopped"
         return f"<Server {self.host}:{self.port} [{status}]>"
+
+if __name__ == "__main__":
+    srv = Server()
+    print(f"Starting {srv}")
+    srv.start()
