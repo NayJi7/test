@@ -28,3 +28,9 @@ class Server:
         while self._running:
             conn, addr = sock.accept()
             self._handle(conn, addr)
+
+    def _handle(self, conn, addr):
+        with conn:
+            data = conn.recv(1024)
+            if data:
+                conn.sendall(b"HTTP/1.1 200 OK\r\n\r\nOK")
