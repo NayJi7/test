@@ -42,3 +42,7 @@ class Server:
                 return True
         except OSError:
             return False
+
+    def __repr__(self):
+        status = "running" if self._running else "stopped"
+        return f"<Server {self.host}:{self.port} [{status}]>"
