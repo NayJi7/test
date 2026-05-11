@@ -19,3 +19,7 @@ class Server:
             sock.bind((self.host, self.port))
             sock.listen(5)
             self._loop(sock)
+
+    def stop(self):
+        """Signal the server to stop after current request."""
+        self._running = False
