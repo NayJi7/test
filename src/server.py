@@ -34,3 +34,11 @@ class Server:
             data = conn.recv(1024)
             if data:
                 conn.sendall(b"HTTP/1.1 200 OK\r\n\r\nOK")
+
+    def health_check(self):
+        """Return True if server socket is reachable."""
+        try:
+            with socket.create_connection((self.host, self.port), timeout=1):
+                return True
+        except OSError:
+            return False
