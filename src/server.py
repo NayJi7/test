@@ -23,3 +23,8 @@ class Server:
     def stop(self):
         """Signal the server to stop after current request."""
         self._running = False
+
+    def _loop(self, sock):
+        while self._running:
+            conn, addr = sock.accept()
+            self._handle(conn, addr)
