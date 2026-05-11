@@ -51,3 +51,5 @@ if __name__ == "__main__":
     srv = Server()
     print(f"Starting {srv}")
     srv.start()
+# ligne stagée
+# ligne NON stagée
