@@ -1,0 +1,9 @@
+name: deliberate fail
+on: pull_request
+jobs:
+  fail:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "deliberate fail"
+          exit 1
