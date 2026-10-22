@@ -1,0 +1,7 @@
+# Paquets : binaires, jamais convertis (leurs empreintes sha256 sont dans bundle/requirements/*.lock)
+*.whl binary
+*.gz binary
+# Installeur Windows : fins de ligne CRLF conservees telles quelles
+*.cmd -text
+# Scripts shell : toujours LF
+*.sh text eol=lf

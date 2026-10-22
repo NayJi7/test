@@ -1,0 +1,149 @@
+[build-system]
+requires = ["setuptools>=83.0.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "graphify-local"
+version = "0.9.93.1"
+description = "graphify-local : fork de graphifyy 0.9.93 sans aucun acces reseau ni appel a une IA externe, integre a Kiro (graphe de connaissances local du code et des documents)."
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE", "LICENSE-MIT", "NOTICE"]
+keywords = ["claude", "claude-code", "codex", "opencode", "kilo", "cursor", "gemini", "aider", "kiro", "pi", "devin", "knowledge-graph", "rag", "graphrag", "obsidian", "community-detection", "tree-sitter", "leiden", "llm"]
+requires-python = ">=3.10"
+dependencies = [
+    "networkx>=3.4",
+    "numpy>=1.21",
+    "rapidfuzz>=3.0",
+    "tomli>=2.0.1; python_version < '3.11'",
+    # Runtime floor is 0.25, not 0.23: 0.23/0.24 cap out at ABI 14
+    # (LANGUAGE_VERSION=14) while the grammars pinned below ship ABI 15
+    # (e.g. tree-sitter-javascript 0.25.0, tree-sitter-powershell 0.26.x).
+    # A resolver is free to pick 0.23.2 for the runtime and 0.25.x for the
+    # grammars, which then fails every parse with "Incompatible Language
+    # version 15". Floor at the oldest runtime that can load them; this also
+    # matches what uv.lock already resolves to.
+    "tree-sitter>=0.25,<0.26",
+    "tree-sitter-python>=0.23,<0.26",
+    "tree-sitter-javascript>=0.23,<0.26",
+    "tree-sitter-typescript>=0.23,<0.25",
+    "tree-sitter-go>=0.23,<0.26",
+    "tree-sitter-rust>=0.23,<0.25",
+    "tree-sitter-java>=0.23,<0.25",
+    "tree-sitter-groovy>=0.1,<0.3",
+    "tree-sitter-c>=0.23,<0.25",
+    "tree-sitter-cpp>=0.23,<0.25",
+    "tree-sitter-ruby>=0.23,<0.25",
+    "tree-sitter-c-sharp>=0.23,<0.25",
+    "tree-sitter-kotlin>=1.0,<2.0",
+    "tree-sitter-scala>=0.23,<0.27",
+    "tree-sitter-php>=0.23,<0.25",
+    "tree-sitter-swift>=0.7,<0.9",
+    "tree-sitter-lua>=0.2,<0.6",
+    "tree-sitter-zig>=1.0,<2.0",
+    "tree-sitter-powershell>=0.26,<0.28",
+    "tree-sitter-elixir>=0.3,<0.5",
+    "tree-sitter-objc>=3.0,<4.0",
+    "tree-sitter-julia>=0.23,<0.25",
+    "tree-sitter-verilog>=1.0,<2.0",
+    "tree-sitter-fortran>=0.6,<0.8",
+    "tree-sitter-bash>=0.23,<0.27",
+    "tree-sitter-json>=0.23,<0.26",
+]
+
+[project.urls]
+Homepage = "https://graphify.com"
+Documentation = "https://docs.graphify.com"
+Repository = "https://github.com/Graphify-Labs/graphify"
+Issues = "https://github.com/Graphify-Labs/graphify/issues"
+
+[project.optional-dependencies]
+# graphify-local : seules les options 100 % locales sont conservees.
+# Retirees : mcp, neo4j, falkordb, google, postgres (psycopg), video (faster-whisper,
+# yt-dlp), kimi, ollama, bedrock, anthropic, gemini, openai, all.
+# leiden et chinese utilisent les memes paquets precompiles pour toutes les
+# versions de Python (graspologic-native, jieba-py), y compris 3.10.
+pdf = ["pypdf>=6.16.1", "markdownify"]
+office = ["python-docx", "openpyxl"]
+leiden = ["graspologic-native>=1.3.1,<2"]
+watch = ["watchdog"]
+svg = ["matplotlib", "pillow>=12.3.0", "numpy>=2.0; python_version >= '3.13'"]
+sql = ["tree-sitter-sql"]
+terraform = ["tree-sitter-hcl"]
+ocaml = ["tree-sitter-ocaml"]
+pascal = ["tree-sitter-pascal"]
+commonlisp = ["tree-sitter-commonlisp"]
+dm = ["tree-sitter-dm>=0.25,<0.26"]
+robot = ["robotframework>=4.0"]
+solidity = ["tree-sitter-solidity==1.2.13"]
+vbnet = ["tree-sitter-vb-dotnet==0.3.0"]
+r = ["tree-sitter-language-pack==0.11.0"]
+erlang = ["tree-sitter-language-pack==0.11.0"]
+chinese = ["jieba-py>=0.46.12,<1"]
+local = ["pypdf>=6.16.1", "markdownify", "python-docx", "openpyxl", "graspologic-native>=1.3.1,<2", "watchdog", "matplotlib", "pillow>=12.3.0", "numpy>=2.0; python_version >= '3.13'", "tree-sitter-sql", "tree-sitter-hcl", "tree-sitter-ocaml", "tree-sitter-pascal", "tree-sitter-commonlisp", "tree-sitter-dm>=0.25,<0.26", "robotframework>=4.0", "tree-sitter-solidity==1.2.13", "tree-sitter-vb-dotnet==0.3.0", "tree-sitter-language-pack==0.11.0", "jieba-py>=0.46.12,<1"]
+
+[project.scripts]
+graphify = "graphify.__main__:main"
+
+[dependency-groups]
+dev = [
+    "bandit>=1.9.4",
+    "build>=1.5.0",
+    "hypothesis>=6.152.7",
+    "nuitka>=4.1",
+    "patchelf>=0.17.2.4 ; sys_platform != 'win32'",
+    "pip-audit>=2.10.0",
+    "pre-commit>=4.6.0",
+    "pyright>=1.1.409",
+    "pytest>=9.0.3",
+    "pytest-cov>=7.1.0",
+    "ruff>=0.15.13",
+    "setuptools>=83.0.0",
+    "wheel>=0.47.0",
+    "tomli>=2.0 ; python_version < '3.11'",
+    "tree-sitter-hcl>=1.2.0",
+    "tree-sitter-ocaml>=0.25.0",
+    "tree-sitter-commonlisp>=0.4.1",
+]
+
+[tool.uv]
+# Install via: uv tool install graphifyy
+# Run without installing: uvx graphifyy install
+package = true
+
+[tool.setuptools]
+packages = ["graphify", "graphify.extractors", "graphify.exporters"]
+include-package-data = false
+
+[tool.setuptools.package-data]
+# The skill bodies ship as graphify/skill*.md (the SKILL.md a host installs is
+# copied from one of these). The progressive-disclosure references sidecar ships
+# under graphify/skills/<host>/references/, and the always-on injection blocks
+# under graphify/always_on/. There is no graphify/skills/<host>/SKILL.md in the
+# repo, so no SKILL.md glob is needed here.
+# graphify/pi/ is the native Pi guard package; Pi registers it in place from the installation.
+graphify = ["skill-kiro.md", "skills/kiro/references/*.md", "always_on/kiro-steering.md", "vendor/*.js", "vendor/*.txt", "vendor/*.md"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+norecursedirs = [
+    "graphify-benchmark", "graphify_eval", "graphify_test",
+    "worked", "llm-stack-corpus", "llm-stack-demo", "product-site",
+    "scripts", "ebook", ".github", "dist", "build",
+]
+
+[tool.bandit]
+skips = ["B404"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+# Keep the committed baseline conservative until upstream adopts a broader lint policy.
+select = ["E9", "F63", "F7", "F82"]
+
+[tool.pyright]
+include = ["graphify", "tests"]
+pythonVersion = "3.10"
+typeCheckingMode = "basic"
