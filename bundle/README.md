@@ -27,11 +27,21 @@ Aucune des 67 dépendances n'est une bibliothèque réseau : pas de `requests`,
 Prérequis : **Python 3.10** (testé avec 3.10.7). Tout Python 3.10.x convient.
 
 **Windows** : décompresser le zip, puis **double-cliquer sur
-`install-windows.cmd`**. L'installation se fait dans
-`%LOCALAPPDATA%\graphify` et le dossier de la commande `graphify` est ajouté
-automatiquement au PATH de l'utilisateur (sans droits administrateur). Ouvrez
-ensuite un nouveau terminal. Pour ne pas toucher au PATH :
-`install-windows.cmd --no-path`.
+`install-windows.cmd`**. Par défaut (mode « dossier »), l'installeur :
+- installe les paquets dans `%LOCALAPPDATA%\graphify\lib` ;
+- crée `%LOCALAPPDATA%\graphify\graphify.cmd`, qui lance **le Python déjà
+  présent sur le poste** (`python -m graphify`) : aucun `python.exe` n'est
+  copié, aucun exécutable n'est créé, le Python du poste n'est pas modifié.
+  C'est compatible avec les stratégies de groupe qui interdisent d'exécuter
+  des programmes depuis le profil utilisateur (erreur « WinError 1260 »);
+- ajoute ce dossier au PATH de l'utilisateur (sans droits administrateur).
+  Ouvrez ensuite un nouveau terminal.
+
+Options : `--dest D:\Outils\graphify` (autre dossier, par ex. si les scripts
+`.cmd` sont bloqués dans le profil), `--no-path`, `--mode venv` (environnement
+Python dédié, si votre poste l'autorise). Limite du mode dossier : les hooks
+git automatiques (`graphify hook install`) ne sont pas pris en charge ; mettez
+le graphe à jour avec `/graphify --update` dans Kiro ou `graphify update .`.
 
 **Linux / macOS** :
 
@@ -48,7 +58,9 @@ Pour forcer un Python précis : `PYTHON=/chemin/python3.10 bash install-offline.
 L'installeur :
 1. choisit les paquets correspondant au système et à la version de Python du
    poste (message clair si la version n'est pas prévue dans le bundle) ;
-2. crée un environnement Python dédié (venv), sans toucher au Python du système ;
+2. installe dans un dossier dédié (mode « dossier », défaut Windows) ou dans un
+   environnement Python dédié (mode « venv », défaut Linux/macOS), sans jamais
+   modifier le Python du système ;
 3. installe uniquement depuis `wheelhouse/` (`--no-index` : PyPI n'est jamais contacté) ;
 4. refuse tout fichier dont l'empreinte diffère du `.lock` (`--require-hashes`) ;
 5. termine par `graphify kiro verify`, qui doit afficher « vérification réussie ».

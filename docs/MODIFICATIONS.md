@@ -322,6 +322,16 @@ Le skill d'origine faisait exécuter à l'agent une quinzaine de blocs
     lance `graphify kiro verify`. Sous Windows, il ajoute la commande au PATH
     de l'utilisateur (registre HKCU, sans droits administrateur ; désactivable
     par `--no-path`).
+  - **Mode « dossier »** (défaut sous Windows, ajouté après un essai réel sur
+    un poste dont une stratégie de groupe bloquait l'exécution de la copie de
+    `python.exe` créée par le venv, erreur WinError 1260) : paquets installés
+    dans `<dest>\lib` par le pip livré avec Python (exécuté depuis son wheel,
+    sans rien installer dans le Python du poste), puis `<dest>\graphify.cmd`
+    qui lance `python -m graphify` avec le Python déjà autorisé
+    (`PYTHONPATH` limité au lanceur). Aucun exécutable créé. Testé sous Linux
+    avec Python 3.10.7 sans réseau (15/15, banc 36/36, site-packages du Python
+    du poste inchangé) ; contenu du `.cmd` vérifié en simulation. Limite : hooks
+    git non pris en charge dans ce mode.
   - `install-windows.cmd` : double-clic. Cherche `py -3.10`, sinon `python`,
     puis lance `installer.py`.
   - `install-offline.sh` : Linux/macOS, cherche `python3.10` puis lance
