@@ -2503,7 +2503,7 @@ def _rebuild_code(
                 f"[graphify watch] community set changed since labeling "
                 f"({len(raw)} saved labels, {len(communities)} communities now; "
                 f"renamed {len(stale)} community(ies) by their hub). "
-                f"Run `graphify label` to refresh names with the LLM.",
+                f"To refresh the names, run /graphify --update in Kiro.",
                 file=sys.stderr,
             )
         questions = suggest_questions(G, communities, labels)

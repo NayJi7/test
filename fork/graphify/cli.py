@@ -2337,7 +2337,7 @@ def dispatch_command(cmd: str) -> None:
                 print(
                     f"[graphify] warning: {'/'.join(_ignored_label_flags)} ignored: "
                     f"reusing saved labels at {labels_path}. "
-                    f"Run `graphify label` to relabel, or delete the labels file.",
+                    f"Delete the labels file to relabel (in Kiro: /graphify --update).",
                     file=sys.stderr,
                 )
             # Reuse saved labels, but don't blindly trust them: the graph may have
@@ -2419,7 +2419,7 @@ def dispatch_command(cmd: str) -> None:
                     f"[graphify] community set changed since labeling "
                     f"({len(existing_labels)} saved labels, {len(communities)} communities now; "
                     f"renamed {changed} community(ies) by their hub). "
-                    f"Run `graphify label` to refresh names with the LLM.",
+                    f"To refresh the names, run /graphify --update in Kiro.",
                     file=sys.stderr,
                 )
         elif no_label and not force_relabel:
@@ -2641,15 +2641,7 @@ def dispatch_command(cmd: str) -> None:
         # exiting silently when a hook-driven rebuild happens to be running.
         ok = _rebuild_code(watch_path, force=force, no_cluster=no_cluster, block_on_lock=True)
         if ok:
-            print("Code graph updated. For doc/paper/image changes run /graphify --update in your AI assistant.")
-            if not (
-                os.environ.get("GEMINI_API_KEY")
-                or os.environ.get("GOOGLE_API_KEY")
-                or os.environ.get("MOONSHOT_API_KEY")
-                or os.environ.get("DEEPSEEK_API_KEY")
-                or os.environ.get("GRAPHIFY_NO_TIPS")
-            ):
-                print("Tip: set GEMINI_API_KEY or GOOGLE_API_KEY to use Gemini for semantic extraction.")
+            print("Code graph updated. For doc/paper/image changes run /graphify --update in Kiro.")
         else:
             print(
                 "Nothing to update or rebuild failed — check output above.",
@@ -3911,11 +3903,9 @@ def dispatch_command(cmd: str) -> None:
                     hint = (" Or pass --code-only to index just the code "
                             "(local AST, no key) and skip the non-code files.")
                 print(
-                    "error: no LLM API key found (" + "; ".join(reasons) + "). "
-                    "Set GEMINI_API_KEY or GOOGLE_API_KEY (gemini), MOONSHOT_API_KEY "
-                    "(kimi), ANTHROPIC_API_KEY (claude), OPENAI_API_KEY (openai), "
-                    "DEEPSEEK_API_KEY (deepseek), or pass --backend. A code-only "
-                    "corpus needs no key." + hint,
+                    "error: graphify-local never calls an external LLM (" + "; ".join(reasons) + "). "
+                    "Documents are read by Kiro: run /graphify in Kiro "
+                    "(graphify kiro prepare). A code-only corpus needs nothing more." + hint,
                     file=sys.stderr,
                 )
                 sys.exit(1)

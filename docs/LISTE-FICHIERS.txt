@@ -33,6 +33,7 @@ MODIFIE  graphify/skills/kiro/references/extraction-spec.md
 MODIFIE  graphify/skills/kiro/references/hooks.md
 MODIFIE  graphify/skills/kiro/references/query.md
 MODIFIE  graphify/tree_html.py
+MODIFIE  graphify/watch.py
 MODIFIE  pyproject.toml
 MODIFIE  tests/test_security.py
 SUPPRIME /PKG-INFO

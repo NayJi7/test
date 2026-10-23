@@ -34,6 +34,25 @@ _PYTHON_DETECT = """\
 # fails loudly in the log if the package is broken under that interpreter.
 _GFY_PROBE="import importlib.util, sys; sys.exit(0 if importlib.util.find_spec('graphify') else 1)"
 GRAPHIFY_PYTHON=""
+# graphify-local, dossier portable : graphify n'est pas dans le site-packages
+# du Python mais dans <dossier>/lib, fourni ici par PYTHONPATH. _GFY_LIB est
+# fige a l'installation du hook ; si le dossier a ete deplace depuis, il est
+# retrouve a cote du graphify du PATH.
+_GFY_LIB='__PINNED_LIB__'
+if [ -z "$_GFY_LIB" ] || [ ! -f "$_GFY_LIB/graphify/__init__.py" ]; then
+    _GFY_LIB=""
+    _GFY_PBIN=$(command -v graphify 2>/dev/null)
+    if [ -n "$_GFY_PBIN" ] && [ -f "$(dirname "$_GFY_PBIN")/lib/graphify/__init__.py" ]; then
+        _GFY_LIB="$(dirname "$_GFY_PBIN")/lib"
+        if command -v cygpath >/dev/null 2>&1; then
+            _GFY_LIB=$(cygpath -m "$_GFY_LIB")
+        fi
+    fi
+fi
+if [ -n "$_GFY_LIB" ]; then
+    PYTHONPATH="$_GFY_LIB"
+    export PYTHONPATH
+fi
 _PINNED='__PINNED_PYTHON__'
 if [ -n "$_PINNED" ] && [ -x "$_PINNED" ] && "$_PINNED" -c "$_GFY_PROBE" 2>/dev/null; then
     GRAPHIFY_PYTHON="$_PINNED"
@@ -920,6 +939,30 @@ def _pinned_python() -> str:
     return sys.executable
 
 
+def _portable_lib() -> str:
+    """graphify-local : le dossier lib/ du dossier portable cree par
+    l'installeur (reconnu a son fichier graphify-local.json), ou "" pour une
+    installation pip classique. Meme liste de caracteres autorises que
+    _pinned_python(), et barres obliques (acceptees par Python et par le shell
+    de Git for Windows)."""
+    lib = Path(__file__).resolve().parent.parent
+    if lib.name != "lib" or not (lib.parent / "graphify-local.json").is_file():
+        return ""
+    value = lib.as_posix()
+    if re.search(r"[^a-zA-Z0-9/_.@: \\-]", value):
+        return ""
+    return value
+
+
+def _portable_launcher() -> str:
+    """graphify-local : chemin du lanceur graphify(.exe) du dossier portable, ou ""."""
+    lib = _portable_lib()
+    if not lib:
+        return ""
+    launcher = Path(lib).parent / ("graphify.exe" if os.name == "nt" else "graphify")
+    return launcher.as_posix() if launcher.is_file() else ""
+
+
 # ``~/snap/<app>/<revision>/`` — snap swaps <revision> on every package update and
 # prunes the old tree, so anything under it is a path with an expiry date.
 _ROTATING_PREFIX_RE = re.compile(r"/snap/[^/]+/(\d+|current)/")
@@ -979,7 +1022,12 @@ def _register_merge_driver(root: Path) -> str:
     """
     import subprocess as _sp
     pinned = _pinned_python()
-    if pinned:
+    launcher = _portable_launcher()
+    if launcher:
+        # graphify-local, dossier portable : `python -m graphify` ne trouverait
+        # pas graphify (absent du site-packages) ; le lanceur du dossier, si.
+        driver = f'"{launcher}" merge-driver %O %A %B'
+    elif pinned:
         # Double-quoted: the allowlist in _pinned_python() permits a space (Windows
         # profile paths), and git runs this driver string through a shell, so an
         # unquoted "C:\\Users\\First Last\\...\\python.exe" would split into two
@@ -1100,10 +1148,16 @@ def install(path: Path = Path(".")) -> str:
         viz_export = ""
 
     pinned = _pinned_python()
-    hook = _HOOK_SCRIPT.replace("__PINNED_PYTHON__", pinned).replace("__VIZ_LIMIT_EXPORT__", viz_export)
-    checkout = _CHECKOUT_SCRIPT.replace("__PINNED_PYTHON__", pinned).replace("__VIZ_LIMIT_EXPORT__", viz_export)
-    merge_hook = _MERGE_SCRIPT.replace("__PINNED_PYTHON__", pinned).replace("__VIZ_LIMIT_EXPORT__", viz_export)
-    rewrite_hook = _REWRITE_SCRIPT.replace("__PINNED_PYTHON__", pinned).replace("__VIZ_LIMIT_EXPORT__", viz_export)
+    lib = _portable_lib()
+
+    def _fill(script: str) -> str:
+        return (script.replace("__PINNED_PYTHON__", pinned).replace("__PINNED_LIB__", lib)
+                .replace("__VIZ_LIMIT_EXPORT__", viz_export))
+
+    hook = _fill(_HOOK_SCRIPT)
+    checkout = _fill(_CHECKOUT_SCRIPT)
+    merge_hook = _fill(_MERGE_SCRIPT)
+    rewrite_hook = _fill(_REWRITE_SCRIPT)
 
     commit_msg = _install_hook(hooks_dir, "post-commit", hook, _HOOK_MARKER, _HOOK_MARKER_END)
     checkout_msg = _install_hook(hooks_dir, "post-checkout", checkout, _CHECKOUT_MARKER, _CHECKOUT_MARKER_END)
@@ -1147,6 +1201,7 @@ def uninstall(path: Path = Path(".")) -> str:
 # The two per-install values in a graphify block: the interpreter that ran
 # `hook install` and the .graphifyrc viz limit (status checks that one itself).
 _PINNED_LINE_RE = re.compile(r"^_PINNED='[^'\n]*'$", re.MULTILINE)
+_LIB_LINE_RE = re.compile(r"^_GFY_LIB='[^'\n]*'$", re.MULTILINE)
 _VIZ_EXPORT_LINE_RE = re.compile(r"^export GRAPHIFY_VIZ_NODE_LIMIT=.*\n", re.MULTILINE)
 
 
@@ -1158,7 +1213,8 @@ def _comparable_block(text: str, marker: str, marker_end: str) -> str | None:
     if end == -1:
         return None
     block = text[start:end + len(marker_end)]
-    return _VIZ_EXPORT_LINE_RE.sub("", _PINNED_LINE_RE.sub("_PINNED=''", block))
+    block = _LIB_LINE_RE.sub("_GFY_LIB=''", _PINNED_LINE_RE.sub("_PINNED=''", block))
+    return _VIZ_EXPORT_LINE_RE.sub("", block)
 
 
 def status(path: Path = Path(".")) -> str:

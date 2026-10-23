@@ -378,3 +378,101 @@ def test_kiro_install_writes_only_skill_and_steering(tmp_path):
         ".kiro/steering/graphify.md",
     ]
 
+
+
+# --------------------------------------------------------------------------- #
+# Dossier portable (installeur du bundle) : hooks git
+# --------------------------------------------------------------------------- #
+
+def _fake_repo(root: Path) -> Path:
+    """Depot git minimal ecrit a la main (`git init` est bloque par le verrou)."""
+    git = root / ".git"
+    for d in ("objects/info", "objects/pack", "refs/heads", "refs/tags", "hooks"):
+        (git / d).mkdir(parents=True)
+    (git / "HEAD").write_text("ref: refs/heads/main\n", encoding="utf-8")
+    (git / "config").write_text("[core]\n\trepositoryformatversion = 0\n\tbare = false\n", encoding="utf-8")
+    return root
+
+
+def test_portable_lib_is_empty_for_a_regular_install():
+    from graphify import hooks
+    assert hooks._portable_lib() == ""
+    assert hooks._portable_launcher() == ""
+
+
+def test_portable_hooks_pin_the_lib_folder(tmp_path, monkeypatch):
+    from graphify import hooks
+    folder = tmp_path / "Outils" / "graphify-local"
+    (folder / "lib" / "graphify").mkdir(parents=True)
+    (folder / "graphify-local.json").write_text("{}", encoding="utf-8")
+    launcher = folder / ("graphify.exe" if os.name == "nt" else "graphify")
+    launcher.write_bytes(b"")
+    monkeypatch.setattr(hooks, "__file__", str(folder / "lib" / "graphify" / "hooks.py"))
+    assert hooks._portable_lib() == (folder / "lib").as_posix()
+
+    repo = _fake_repo(tmp_path / "projet")
+    hooks.install(repo)
+    for name in ("post-commit", "post-checkout", "post-merge", "post-rewrite"):
+        text = (repo / ".git" / "hooks" / name).read_text(encoding="utf-8")
+        assert f"_GFY_LIB='{(folder / 'lib').as_posix()}'" in text, name
+        assert "__PINNED_LIB__" not in text
+        assert 'export PYTHONPATH' in text
+    driver = subprocess.run(["git", "-C", str(repo), "config", "merge.graphify.driver"],
+                            capture_output=True, text=True).stdout.strip()
+    assert driver == f'"{launcher.as_posix()}" merge-driver %O %A %B'
+    # `hook status` ne signale pas de difference pour la valeur figee.
+    assert "out of date" not in hooks.status(repo)
+    assert hooks.status(repo).count(": installed") == 4
+
+
+@pytest.mark.parametrize("argv", [
+    ["git", "-C", r"C:\Mes projets\app", "config", "merge.graphify.name", "graphify graph.json union merge"],
+    [r"C:\Users\First Last\Python310\python.exe", "-c", 'print("a b")', "--multiprocessing-fork"],
+    ["x", "", "a\\", "a\\\\b", 'a\\"b', 'tab\there', 'end\\\\"', '""'],
+])
+def test_windows_command_line_split_is_the_inverse_of_list2cmdline(argv):
+    assert _egress_guard._split_windows_cmdline(subprocess.list2cmdline(argv)) == argv
+
+
+def test_windows_popen_command_lines_are_checked_per_argument(monkeypatch):
+    # Sous Windows, l'evenement d'audit de subprocess.Popen recoit une chaine.
+    monkeypatch.setattr(_egress_guard, "_IS_WINDOWS", True)
+    check = _egress_guard._check_exec
+    check(None, subprocess.list2cmdline(["git", "-C", r"C:\Mes projets\app", "config", "--get", "x"]))
+    check(None, subprocess.list2cmdline([sys.executable, "-m", "graphify", "update", "."]))
+    for argv in (["git", "-C", r"C:\p", "push"], ["curl", "https://example.com"],
+                 [sys.executable, "-c", "import os"]):
+        with pytest.raises(EgressBlocked):
+            check(None, subprocess.list2cmdline(argv))
+
+
+def _fake_frame(filename, name, **local_vars):
+    from types import SimpleNamespace
+    return SimpleNamespace(f_code=SimpleNamespace(co_filename=filename, co_name=name), f_locals=local_vars)
+
+
+def test_windows_create_process_reads_the_caller_command_line():
+    # Python 3.10 sous Windows passe une ligne de commande illisible a
+    # l'evenement _winapi.CreateProcess : le verrou lit celle de l'appelant.
+    check = _egress_guard._check_windows_create_process
+    cmd = subprocess.list2cmdline(["git", "rev-parse", "--show-toplevel"])
+    _egress_guard._TLS.popen_checked = cmd
+    check(_fake_frame(r"C:\Python310\lib\subprocess.py", "_execute_child", args=cmd))
+    _egress_guard._TLS.popen_checked = cmd
+    with pytest.raises(EgressBlocked):
+        check(_fake_frame(r"C:\Python310\lib\subprocess.py", "_execute_child", args="curl https://x"))
+    with pytest.raises(EgressBlocked):  # aucun controle subprocess.Popen prealable
+        check(_fake_frame(r"C:\Python310\lib\subprocess.py", "_execute_child", args=cmd))
+    with pytest.raises(EgressBlocked):
+        check(_fake_frame(r"C:\evil.py", "run", args=cmd))
+
+    def spawn_cmd(exe, code):
+        return " ".join('"%s"' % x for x in [exe, "-I", "-c", code, "--multiprocessing-fork"])
+
+    worker = "from multiprocessing.spawn import spawn_main; spawn_main(parent_pid=12, pipe_handle=345)"
+    mp_file = r"C:\Python310\lib\multiprocessing\popen_spawn_win32.py"
+    check(_fake_frame(mp_file, "__init__", cmd=spawn_cmd(sys.executable, worker), python_exe=sys.executable))
+    with pytest.raises(EgressBlocked):
+        check(_fake_frame(mp_file, "__init__", cmd=spawn_cmd(sys.executable, "import os"), python_exe=sys.executable))
+    with pytest.raises(EgressBlocked):
+        check(_fake_frame(mp_file, "__init__", cmd=spawn_cmd("curl.exe", worker), python_exe="curl.exe"))

@@ -5,3 +5,5 @@
 *.cmd -text
 # Scripts shell : toujours LF
 *.sh text eol=lf
+# Lanceur graphify.exe (distlib) : binaire
+*.exe binary

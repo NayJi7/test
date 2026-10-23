@@ -41,6 +41,7 @@ class EgressBlocked(PermissionError):
 
 
 _INSTALLED = False
+_IS_WINDOWS = os.name == "nt"
 _LOCK = threading.Lock()
 _TLS = threading.local()
 
@@ -148,9 +149,62 @@ def _git_args_allowed(argv: list[str]) -> bool:
     return bool(rest) and rest[0] in _GIT_ALLOWED_SUBCOMMANDS
 
 
+def _split_windows_cmdline(cmdline: str) -> list[str]:
+    """Decoupe une ligne de commande Windows selon les regles du CRT MSVC
+    (CommandLineToArgvW) : l'inverse exact de ``subprocess.list2cmdline``.
+
+    Sous Windows, ``subprocess.Popen`` convertit la liste d'arguments en une
+    seule chaine AVANT l'evenement d'audit : sans ce decoupage, ``git -C D
+    config ...`` serait vu comme un programme nomme "git -C D config ...".
+    """
+    args: list[str] = []
+    cur: list[str] = []
+    in_arg = in_quotes = False
+    i, n = 0, len(cmdline)
+    while i < n:
+        c = cmdline[i]
+        if c in " \t" and not in_quotes:
+            if in_arg:
+                args.append("".join(cur))
+                cur, in_arg = [], False
+            i += 1
+            continue
+        in_arg = True
+        if c == "\\":
+            j = i
+            while j < n and cmdline[j] == "\\":
+                j += 1
+            count = j - i
+            if j < n and cmdline[j] == '"':
+                cur.append("\\" * (count // 2))
+                if count % 2:
+                    cur.append('"')
+                    i = j + 1
+                else:
+                    i = j
+            else:
+                cur.append("\\" * count)
+                i = j
+            continue
+        if c == '"':
+            if in_quotes and i + 1 < n and cmdline[i + 1] == '"':
+                cur.append('"')
+                i += 2
+                continue
+            in_quotes = not in_quotes
+            i += 1
+            continue
+        cur.append(c)
+        i += 1
+    if in_arg:
+        args.append("".join(cur))
+    return args
+
+
 def _check_exec(executable: object, argv: object) -> None:
     if isinstance(argv, (str, bytes, os.PathLike)):
-        args = [os.fsdecode(argv) if not isinstance(argv, str) else argv]
+        text = os.fsdecode(argv) if not isinstance(argv, str) else argv
+        args = _split_windows_cmdline(text) if _IS_WINDOWS else [text]
     else:
         try:
             args = [os.fsdecode(a) if not isinstance(a, str) else a for a in (argv or [])]
@@ -188,7 +242,7 @@ def _hook(event: str, args: tuple) -> None:
     if event == "subprocess.Popen":
         # args = (executable, args, cwd, env)
         _check_exec(args[0], args[1])
-        _TLS.popen_checked = True
+        _TLS.popen_checked = args[1]
         return
     if event == "os.exec":
         # args = (path, args, env)
@@ -203,14 +257,39 @@ def _hook(event: str, args: tuple) -> None:
         _check_exec(args[0], args[1])
         return
     if event == "_winapi.CreateProcess":
-        # Deja controle via subprocess.Popen, ou processus de travail multiprocessing.
-        if getattr(_TLS, "popen_checked", False):
-            _TLS.popen_checked = False
+        _check_windows_create_process(sys._getframe(1))
+
+
+def _check_windows_create_process(caller) -> None:
+    """Controle d'un lancement de processus Windows (_winapi.CreateProcess).
+
+    Python 3.10 transmet a cet evenement une ligne de commande illisible (bogue
+    CPython corrige en 3.11 : l'objet est lu comme une chaine C). La ligne de
+    commande reelle est donc lue dans le code Python appelant, qui n'est
+    accepte que s'il s'agit de :
+    - subprocess.Popen, pour la ligne de commande qu'il vient de faire
+      controler (evenement subprocess.Popen) ;
+    - multiprocessing (popen_spawn_win32), pour un processus de travail de ce
+      Python (spawn_main ... --multiprocessing-fork).
+    """
+    checked = getattr(_TLS, "popen_checked", None)
+    _TLS.popen_checked = None
+    code = caller.f_code if caller is not None else None
+    filename = re.split(r"[\\/]", code.co_filename)[-1] if code is not None else ""
+    if filename == "subprocess.py" and code.co_name == "_execute_child":
+        args = caller.f_locals.get("args")
+        if checked is not None and args == checked:
             return
-        cmdline = str(args[1] if len(args) > 1 else "")
-        if "--multiprocessing-fork" in cmdline:
-            return
-        _deny(f"CreateProcess {cmdline[:80]}")
+    elif filename == "popen_spawn_win32.py":
+        cmd = caller.f_locals.get("cmd")
+        exe = caller.f_locals.get("python_exe")
+        if isinstance(cmd, str):
+            argv = _split_windows_cmdline(cmd)
+            if (len(argv) >= 2 and argv[-1] == "--multiprocessing-fork"
+                    and _is_current_python(argv[0]) and _python_args_allowed(argv[:-1])
+                    and (exe is None or _is_current_python(exe))):
+                return
+    _deny(f"CreateProcess depuis {filename or '?'}")
 
 
 def install() -> None:

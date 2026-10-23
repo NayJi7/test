@@ -14,6 +14,7 @@ reconfiguré.
 | `install-windows.cmd` | Installation Windows : double-clic (pas de PowerShell) |
 | `install-offline.sh` | Installation Linux / macOS |
 | `installer.py` | L'installeur lui-même (bibliothèque standard Python uniquement), appelé par les deux fichiers ci-dessus |
+| `launcher/t64.exe` | Le lanceur `.exe` standard de pip (distlib 0.4.0, licence dans `launcher/`) qui devient `graphify.exe` |
 | `wheelhouse/<plateforme>-py310/` | Les 67 paquets nécessaires (graphify + dépendances), précompilés pour Python 3.10, pour Linux x86_64, Windows x64 et macOS Apple Silicon |
 | `requirements/<plateforme>-py310.lock` | Version exacte et empreinte sha256 de chacun de ces 67 fichiers |
 | `outils/banc-anti-fuite.py` | Banc anti-fuite (Linux, `strace`) |
@@ -24,46 +25,56 @@ Aucune des 67 dépendances n'est une bibliothèque réseau : pas de `requests`,
 
 ## 1. Installer (sur chaque poste, sans réseau)
 
-Prérequis : **Python 3.10** (testé avec 3.10.7). Tout Python 3.10.x convient.
+Prérequis : **Python 3.10 64 bits** dans le PATH (testé avec 3.10.7 ; tout
+3.10.x convient). Il n'est pas modifié.
 
-**Windows** : décompresser le zip, puis **double-cliquer sur
-`install-windows.cmd`**. Par défaut (mode « dossier »), l'installeur :
-- installe les paquets dans `%LOCALAPPDATA%\graphify\lib` ;
-- crée `%LOCALAPPDATA%\graphify\graphify.cmd`, qui lance **le Python déjà
-  présent sur le poste** (`python -m graphify`) : aucun `python.exe` n'est
-  copié, aucun exécutable n'est créé, le Python du poste n'est pas modifié.
-  C'est compatible avec les stratégies de groupe qui interdisent d'exécuter
-  des programmes depuis le profil utilisateur (erreur « WinError 1260 »);
-- ajoute ce dossier au PATH de l'utilisateur (sans droits administrateur).
-  Ouvrez ensuite un nouveau terminal.
+Une seule méthode :
 
-Options : `--dest D:\Outils\graphify` (autre dossier, par ex. si les scripts
-`.cmd` sont bloqués dans le profil), `--no-path`, `--mode venv` (environnement
-Python dédié, si votre poste l'autorise). Limite du mode dossier : les hooks
-git automatiques (`graphify hook install`) ne sont pas pris en charge ; mettez
-le graphe à jour avec `/graphify --update` dans Kiro ou `graphify update .`.
+1. Décompresser le zip à un endroit où l'exécution de programmes est autorisée.
+2. **Double-cliquer sur `install-windows.cmd`** (Linux/macOS : `bash install-offline.sh`).
+   Un dossier **`graphify-local`** est créé à côté :
 
-**Linux / macOS** :
-
-```bash
-unzip graphify-local-0.9.93.1.zip && cd graphify-local
-bash install-offline.sh                          # installe dans ~/.local/graphify
-export PATH="$HOME/.local/graphify/bin:$PATH"    # à ajouter à ~/.bashrc ou ~/.zshrc
-```
-
-Option commune : `--dest <dossier>` pour choisir le dossier d'installation.
-Pour forcer un Python précis : `PYTHON=/chemin/python3.10 bash install-offline.sh`
-(Linux/macOS) ou `py -3.10 -I installer.py` (Windows).
+   ```
+   graphify-local\
+       graphify.exe          la commande (Linux/macOS : graphify)
+       lib\                  graphify et ses 66 dépendances
+       graphify-local.json   version, Python utilisé
+       LISEZMOI.txt
+   ```
+3. Déplacer ce dossier où vous voulez, puis **l'ajouter au PATH** ; ouvrir un
+   nouveau terminal. `graphify` s'utilise alors comme après un `pip install`.
 
 L'installeur :
 1. choisit les paquets correspondant au système et à la version de Python du
    poste (message clair si la version n'est pas prévue dans le bundle) ;
-2. installe dans un dossier dédié (mode « dossier », défaut Windows) ou dans un
-   environnement Python dédié (mode « venv », défaut Linux/macOS), sans jamais
-   modifier le Python du système ;
-3. installe uniquement depuis `wheelhouse/` (`--no-index` : PyPI n'est jamais contacté) ;
-4. refuse tout fichier dont l'empreinte diffère du `.lock` (`--require-hashes`) ;
+2. vérifie l'empreinte sha256 de chaque paquet par rapport au `.lock` et
+   refuse tout fichier absent, en trop ou différent (rien n'est installé dans ce cas) ;
+3. décompresse les paquets dans `graphify-local\lib` (pip n'est pas utilisé,
+   rien n'est téléchargé) ;
+4. crée `graphify.exe` : le lanceur standard de pip, qui démarre **le Python
+   qui a lancé l'installeur** (chemin absolu inscrit dans le lanceur, jamais un
+   `python.exe` du dossier courant), en mode isolé (`-I`). Le dossier `lib\`
+   est retrouvé à côté du lanceur : déplacer le dossier ne casse rien ;
 5. termine par `graphify kiro verify`, qui doit afficher « vérification réussie ».
+
+Il ne modifie ni le PATH, ni le Python du poste, ni aucun autre dossier.
+Relancer l'installeur remplace le dossier `graphify-local` qu'il a créé.
+
+Limites :
+- si le Python du poste est déplacé ou désinstallé, relancez l'installeur ;
+- Windows limite les chemins à 260 caractères : le chemin complet du dossier
+  `graphify-local` ne doit pas dépasser la longueur indiquée à la fin de
+  l'installation et dans `LISEZMOI.txt` (≈ 140 caractères), sauf si les
+  chemins longs sont activés sur le poste.
+
+### Hooks git
+
+`graphify hook install` fonctionne avec ce dossier : les hooks retrouvent
+graphify dans `graphify-local\lib` (chemin inscrit à l'installation du hook,
+ou, si le dossier a été déplacé depuis, à côté du `graphify` du PATH). Après
+un déplacement du dossier, relancez `graphify hook install` dans le projet
+pour mettre à jour le pilote de fusion de `graph.json` (les hooks, eux,
+continuent de fonctionner via le PATH).
 
 ## 2. Brancher un projet sur Kiro
 

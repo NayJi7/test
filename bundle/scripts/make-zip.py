@@ -3,9 +3,11 @@
     python3 -I scripts/make-zip.py <version>                         -> graphify-local-<version>.zip (tous systemes)
     python3 -I scripts/make-zip.py <version> --only windows-amd64-py310 -> graphify-local-<version>-windows-amd64-py310.zip
 
-Contenu, sous un dossier racine graphify-local/ : installer.py,
-install-windows.cmd, install-offline.sh, README.md, requirements/ et
-wheelhouse/ (du ou des systemes choisis), outils/banc-anti-fuite.py.
+Contenu, sous un dossier racine graphify-local-<version>-installeur/ :
+installer.py, install-windows.cmd, install-offline.sh, README.md, launcher/
+(lanceur graphify.exe), requirements/ et wheelhouse/ (du ou des systemes
+choisis), outils/banc-anti-fuite.py. L'installeur cree graphify-local/ dans
+ce dossier.
 """
 import hashlib
 import sys
@@ -18,7 +20,8 @@ only = sys.argv[sys.argv.index("--only") + 1] if "--only" in sys.argv else None
 archive = ROOT / (f"graphify-local-{version}-{only}.zip" if only else f"graphify-local-{version}.zip")
 
 entries: list[tuple[Path, str]] = []
-for item in ("installer.py", "install-windows.cmd", "install-offline.sh", "README.md"):
+for item in ("installer.py", "install-windows.cmd", "install-offline.sh", "README.md",
+             "launcher/t64.exe", "launcher/LICENSE-distlib.txt"):
     entries.append((ROOT / item, item))
 for lock in sorted((ROOT / "requirements").glob("*.lock")):
     if only is None or lock.stem == only:
@@ -37,7 +40,7 @@ if bench.is_file():
 archive.unlink(missing_ok=True)
 with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as z:
     for src, arc in entries:
-        info = zipfile.ZipInfo(f"graphify-local/{arc}", date_time=(2026, 10, 22, 0, 0, 0))
+        info = zipfile.ZipInfo(f"graphify-local-{version}-installeur/{arc}", date_time=(2026, 10, 22, 0, 0, 0))
         info.compress_type = zipfile.ZIP_DEFLATED
         info.external_attr = (0o755 if src.suffix in (".sh", ".py") else 0o644) << 16
         z.writestr(info, src.read_bytes())

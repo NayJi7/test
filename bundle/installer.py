@@ -1,46 +1,116 @@
 """graphify - installeur HORS LIGNE (Windows, Linux, macOS).
 
 Usage :
-    Windows : double-clic sur install-windows.cmd   (ou : py -3.10 -I installer.py)
-    Linux / macOS : bash install-offline.sh          (ou : python3.10 -I installer.py)
+    Windows       : double-clic sur install-windows.cmd
+    Linux / macOS : bash install-offline.sh
 
-Options :
-    --dest DOSSIER   dossier d'installation
-                     (defaut : %LOCALAPPDATA%\\graphify sous Windows, ~/.local/graphify ailleurs)
-    --no-path        Windows : ne pas ajouter graphify au PATH de l'utilisateur
-    --mode MODE      "dossier" (defaut sous Windows) ou "venv" (defaut ailleurs)
+Une seule methode d'installation : l'installeur cree, A COTE DE LUI, un dossier
+`graphify-local/` autonome :
 
-Modes :
-- dossier : les paquets sont installes dans DOSSIER\\lib et graphify est lance
-  par le Python deja present sur le poste, via DOSSIER\\graphify.cmd
-  (`python -m graphify`). Aucun executable n'est copie ni cree : compatible
-  avec les strategies de groupe Windows qui interdisent d'executer des
-  programmes depuis le profil utilisateur (erreur WinError 1260). Le Python
-  du poste n'est pas modifie (rien n'est ajoute a ses site-packages).
-- venv : environnement Python dedie (copie/lien de python.exe dans DOSSIER\\venv).
+    graphify-local/
+        graphify.exe        (Windows ; `graphify` sous Linux/macOS) : la commande
+        lib/                graphify + ses 66 dependances, deja decompresses
+        graphify-local.json version, Python utilise, date
+        LISEZMOI.txt
+
+Ce dossier peut ensuite etre deplace n'importe ou sur le poste, puis ajoute au
+PATH : `graphify` fonctionne alors comme apres un `pip install`. L'installeur
+ne modifie ni le PATH, ni le Python du poste, ni aucun autre dossier.
+
+`graphify.exe` est le lanceur standard que pip utilise pour ses commandes
+(`t64.exe` de distlib, fourni dans launcher/). Il lance le Python 3.10 qui a
+execute l'installeur (chemin absolu, inscrit dans le lanceur : jamais un
+python.exe trouve dans le dossier courant) en mode isole (-I : PYTHONPATH,
+PYTHONHOME et site utilisateur ignores). Le dossier lib/ est retrouve a cote
+du lanceur : deplacer le dossier ne casse rien.
 
 Garanties :
-- seuls les paquets du dossier wheelhouse/ sont utilises (--no-index : PyPI
-  n'est jamais contacte) ;
+- seuls les paquets du dossier wheelhouse/ sont utilises (rien n'est telecharge,
+  pip n'est pas utilise) ;
 - chaque paquet doit avoir exactement l'empreinte sha256 inscrite dans
-  requirements/<plateforme>-py<XY>.lock (--require-hashes), XY = version de Python, sinon l'installation echoue ;
-- le Python du systeme n'est jamais modifie ;
+  requirements/<plateforme>-py<XY>.lock, et chaque paquet du .lock doit etre
+  present : sinon rien n'est installe ;
 - auto-controle final : `graphify kiro verify`.
 
 N'utilise que la bibliotheque standard de Python.
 """
 from __future__ import annotations
 
-import argparse
+import compileall
+import datetime
+import hashlib
+import io
+import json
 import os
-import shutil
 import platform
+import re
+import shutil
+import stat
 import subprocess
 import sys
-import venv
-from pathlib import Path
+import zipfile
+from pathlib import Path, PurePosixPath
 
 HERE = Path(__file__).resolve().parent
+NAME = "graphify-local"
+DEST = HERE / NAME
+MARKER = "graphify-local.json"
+# Lanceur distlib 0.4.0 (distlib/t64.exe du wheel distlib-0.4.0-py2.py3-none-any.whl,
+# sha256 du wheel 9659f7d87e46584a30b5780e43ac7a2143098441670ff0a49d5f9034c54a6c16).
+LAUNCHER_SHA256 = "81a618f21cb87db9076134e70388b6e9cb7c2106739011b6a51772d22cae06b7"
+WIN_MAX_PATH = 259  # MAX_PATH (260) moins le NUL final
+# Ajout maximal d'un fichier .pyc par rapport a son .py :
+# "a/b.py" -> "a/__pycache__/b.cpython-310.pyc"
+PYC_EXTRA = len("__pycache__/") + len(".cpython-3XX.pyc") - len(".py")
+
+# Code du lanceur (__main__.py de l'archive ajoutee au lanceur).
+LAUNCHER_MAIN = '''\
+# graphify-local : lanceur du dossier portable (genere par installer.py).
+import os
+import re
+import sys
+
+_here = os.path.dirname(os.path.realpath(sys.argv[0]))
+_lib = os.path.join(_here, "lib")
+if not os.path.isfile(os.path.join(_lib, "graphify", "__init__.py")):
+    sys.exit("graphify : dossier lib introuvable dans " + _here + " (relancez l'installeur).")
+sys.path.insert(0, _lib)
+# Pour les processus Python que graphify relance lui-meme (python -m graphify).
+os.environ["PYTHONPATH"] = _lib
+sys.argv[0] = re.sub(r"(\\.exe)?$", "", sys.argv[0], flags=re.IGNORECASE)
+from graphify.__main__ import main
+sys.exit(main())
+'''
+
+LISEZMOI = """\
+graphify (graphify-local {version}) - dossier portable
+=====================================================
+
+Ce dossier contient tout graphify : la commande {exe}, et dans lib/ graphify
+et toutes ses dependances. Il n'a besoin que de Python {pyver} :
+    {python}
+(le Python qui a lance l'installeur ; si ce Python est deplace ou desinstalle,
+relancez l'installeur).
+
+Utilisation
+-----------
+1. Placez ce dossier ou vous voulez (a un endroit ou l'execution de programmes
+   est autorisee). Sous Windows, son chemin complet ne doit pas depasser
+   {maxlen} caracteres (limite Windows de 260 caracteres par fichier).
+2. Ajoutez ce dossier au PATH, puis ouvrez un nouveau terminal.
+3. Verifiez : graphify kiro verify
+
+Le dossier peut etre deplace a nouveau plus tard : mettez simplement le PATH a
+jour. Les hooks git deja installes (graphify hook install) retrouvent le
+nouveau dossier via le PATH.
+
+Desinstaller : retirez le dossier du PATH et supprimez-le.
+"""
+
+
+def fail(msg: str) -> int:
+    print(f"\nERREUR : {msg}", file=sys.stderr)
+    return 1
 
 
 def detect_platform() -> str:
@@ -54,213 +124,216 @@ def detect_platform() -> str:
     raise SystemExit(f"Plateforme non prise en charge par ce bundle : {sys.platform} / {platform.machine()}")
 
 
-def default_dest() -> Path:
-    if sys.platform == "win32":
-        base = os.environ.get("LOCALAPPDATA") or str(Path.home() / "AppData" / "Local")
-        return Path(base) / "graphify"
-    return Path.home() / ".local" / "graphify"
+def canon(name: str) -> str:
+    return re.sub(r"[-_.]+", "-", name).lower()
 
 
-def add_to_user_path_windows(folder: Path) -> bool:
-    """Ajoute `folder` au PATH de l'utilisateur (registre HKCU, sans droits admin)."""
-    import ctypes
-    import winreg
-
-    with winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment", 0,
-                        winreg.KEY_READ | winreg.KEY_WRITE) as key:
-        try:
-            current, kind = winreg.QueryValueEx(key, "Path")
-        except FileNotFoundError:
-            current, kind = "", winreg.REG_EXPAND_SZ
-        parts = [p for p in current.split(";") if p]
-        if any(os.path.normcase(p.rstrip("\\")) == os.path.normcase(str(folder)) for p in parts):
-            return False
-        parts.append(str(folder))
-        winreg.SetValueEx(key, "Path", 0, kind, ";".join(parts))
-    # Previent les nouvelles fenetres (Explorateur, terminaux) du changement.
-    HWND_BROADCAST, WM_SETTINGCHANGE, SMTO_ABORTIFHUNG = 0xFFFF, 0x001A, 0x0002
-    ctypes.windll.user32.SendMessageTimeoutW(HWND_BROADCAST, WM_SETTINGCHANGE, 0, "Environment",
-                                             SMTO_ABORTIFHUNG, 5000, None)
-    return True
+def read_lock(lock: Path) -> dict[str, tuple[str, set[str]]]:
+    """{nom canonique: (version, {sha256...})} depuis un .lock au format pip."""
+    text = lock.read_text(encoding="utf-8").replace("\\\n", " ")
+    pins: dict[str, tuple[str, set[str]]] = {}
+    for line in text.splitlines():
+        m = re.match(r"^([A-Za-z0-9_.-]+)==(\S+)\s+(.*)$", line.strip())
+        if m:
+            hashes = set(re.findall(r"--hash=sha256:([0-9a-f]{64})", m.group(3)))
+            pins[canon(m.group(1))] = (m.group(2), hashes)
+    return pins
 
 
-def bundled_pip_command() -> list[str]:
-    """Commande pip sans rien installer dans le Python du poste.
+def verified_wheels(wheelhouse: Path, lock: Path) -> list[Path]:
+    """Les wheels du .lock, apres verification de leur empreinte sha256."""
+    pins = read_lock(lock)
+    found: dict[str, Path] = {}
+    errors = []
+    rejected = set()
+    for whl in sorted(wheelhouse.glob("*.whl")):
+        parts = whl.name[:-4].split("-")
+        name, version = canon(parts[0]), parts[1]
+        pin = pins.get(name)
+        if pin is None or pin[0] != version:
+            rejected.add(name)
+            errors.append(f"{whl.name} : absent du verrouillage {lock.name}")
+            continue
+        digest = hashlib.sha256(whl.read_bytes()).hexdigest()
+        if digest not in pin[1]:
+            rejected.add(name)
+            errors.append(f"{whl.name} : empreinte {digest} differente de celle du verrouillage")
+            continue
+        found[name] = whl
+    for name, (version, _) in sorted(pins.items()):
+        if name not in found and name not in rejected:
+            errors.append(f"{name}=={version} : paquet absent de {wheelhouse}")
+    if errors:
+        raise SystemExit("Paquets refuses (rien n'a ete installe) :\n  - " + "\n  - ".join(errors))
+    return [found[n] for n in sorted(found)]
 
-    Utilise le pip livre avec Python (ensurepip/_bundled/pip-*.whl), execute
-    directement depuis son fichier wheel. A defaut, `python -m pip`.
+
+def wheel_targets(whl: Path) -> list[tuple[zipfile.ZipInfo, str]]:
+    """(entree, chemin relatif dans lib/) pour chaque fichier a installer.
+
+    Comme pip : le contenu d'un wheel va dans site-packages, sauf <nom>.data/
+    dont seuls purelib/ et platlib/ vont aussi dans site-packages (scripts,
+    headers et data ne servent pas a graphify et ne sont pas installes).
+    Refuse tout chemin absolu ou contenant '..'.
     """
+    out = []
+    with zipfile.ZipFile(whl) as z:
+        for info in z.infolist():
+            if info.is_dir():
+                continue
+            p = PurePosixPath(info.filename)
+            if p.is_absolute() or ".." in p.parts or ":" in info.filename or "\\" in info.filename:
+                raise SystemExit(f"{whl.name} : chemin interdit dans l'archive : {info.filename}")
+            if p.parts[0].endswith(".data"):
+                if len(p.parts) > 2 and p.parts[1] in ("purelib", "platlib"):
+                    out.append((info, str(PurePosixPath(*p.parts[2:]))))
+                continue
+            out.append((info, info.filename))
+    return out
+
+
+def long_paths_enabled() -> bool:
     try:
-        import ensurepip
+        import winreg
 
-        wheels = sorted((Path(ensurepip.__file__).parent / "_bundled").glob("pip-*.whl"))
-    except Exception:
-        wheels = []
-    if wheels:
-        # -E -s : ignore PYTHONPATH et le site utilisateur ; pas -I, qui
-        # retirerait le dossier du script (le wheel) de sys.path.
-        return [sys.executable, "-E", "-s", str(wheels[-1] / "pip")]
-    return [sys.executable, "-m", "pip"]
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SYSTEM\CurrentControlSet\Control\FileSystem") as key:
+            return winreg.QueryValueEx(key, "LongPathsEnabled")[0] == 1
+    except OSError:
+        return False
 
 
-def write_wrapper(dest: Path, lib_dir: Path) -> Path:
-    """Lanceur `graphify` qui utilise le Python du poste et le dossier lib/."""
+def build_launcher(target: Path, python: str) -> None:
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr(zipfile.ZipInfo("__main__.py", date_time=(2026, 1, 1, 0, 0, 0)), LAUNCHER_MAIN)
     if sys.platform == "win32":
-        wrapper = dest / "graphify.cmd"
-        wrapper.write_text(
-            "@echo off\r\n"
-            "rem graphify (bundle interne) - lanceur genere par installer.py\r\n"
-            "setlocal\r\n"
-            f'set "PYTHONPATH={lib_dir}"\r\n'
-            'set "PYTHONNOUSERSITE=1"\r\n'
-            f'"{sys.executable}" -m graphify %*\r\n'
-            "exit /b %ERRORLEVEL%\r\n",
-            encoding="ascii",
-            newline="",
-        )
+        stub = (HERE / "launcher" / "t64.exe").read_bytes()
+        if hashlib.sha256(stub).hexdigest() != LAUNCHER_SHA256:
+            raise SystemExit("launcher/t64.exe : empreinte inattendue, installation annulee.")
+        shebang = f'#!"{python}" -I\n'.encode("utf-8")
     else:
-        wrapper = dest / "bin" / "graphify"
-        wrapper.parent.mkdir(parents=True, exist_ok=True)
-        wrapper.write_text(
-            "#!/bin/sh\n"
-            "# graphify (bundle interne) - lanceur genere par installer.py\n"
-            f'PYTHONPATH="{lib_dir}" PYTHONNOUSERSITE=1 exec "{sys.executable}" -m graphify "$@"\n',
-            encoding="utf-8",
-        )
-        wrapper.chmod(0o755)
-    return wrapper
+        stub = b""
+        shebang = f"#!{python} -I\n".encode("utf-8")
+    target.write_bytes(stub + shebang + buf.getvalue())
+    if sys.platform != "win32":
+        target.chmod(target.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
 
-def install_dossier(dest: Path, wheelhouse: Path, lock: Path, pip_env: dict) -> Path | None:
-    lib_dir = dest / "lib"
-    marker = lib_dir / ".graphify-local"
-    if lib_dir.exists():
-        if not marker.exists() and any(lib_dir.iterdir()):
-            print(f"{lib_dir} existe deja et n'a pas ete cree par cet installeur : choisissez un autre --dest.",
-                  file=sys.stderr)
-            return None
-        shutil.rmtree(lib_dir)
-    old_venv = dest / "venv"
-    if (old_venv / "pyvenv.cfg").exists():
-        shutil.rmtree(old_venv, ignore_errors=True)  # reste d'une tentative en mode venv
-    lib_dir.mkdir(parents=True)
-    res = subprocess.run(
-        bundled_pip_command() + [
-            "install", "--no-index", "--only-binary=:all:", "--require-hashes",
-            "--find-links", str(wheelhouse), "-r", str(lock),
-            "--target", str(lib_dir), "--no-warn-script-location", "--disable-pip-version-check",
-        ],
-        env=pip_env,
-    )
-    if res.returncode != 0:
-        print("Echec de l'installation (paquet manquant ou empreinte differente).", file=sys.stderr)
-        return None
-    # Les lanceurs .exe generes par pip ne sont pas utilises : on les retire.
-    shutil.rmtree(lib_dir / "bin", ignore_errors=True)
-    marker.write_text("installe par installer.py (mode dossier)\n", encoding="utf-8")
-    return write_wrapper(dest, lib_dir)
+def check_python(python: str) -> str | None:
+    if sys.maxsize <= 2 ** 32:
+        return "ce Python est en 32 bits ; graphify a besoin de Python 3.10 en 64 bits."
+    if '"' in python or "\n" in python:
+        return f"chemin de Python non pris en charge : {python!r}"
+    if sys.platform != "win32" and (" " in python or len(python) > 120):
+        return f"chemin de Python non pris en charge dans un lanceur Linux/macOS : {python!r}"
+    return None
 
 
 def main() -> int:
     sys.stdout.reconfigure(line_buffering=True)
-    parser = argparse.ArgumentParser(description="Installation hors ligne de graphify")
-    parser.add_argument("--dest", type=Path, default=None)
-    parser.add_argument("--no-path", action="store_true")
-    parser.add_argument("--mode", choices=("dossier", "venv"),
-                        default="dossier" if sys.platform == "win32" else "venv")
-    args = parser.parse_args()
-
     plat = detect_platform()
-    name = f"{plat}-py{sys.version_info[0]}{sys.version_info[1]}"
-    dest = (args.dest or default_dest()).resolve()
+    tag = f"{sys.version_info[0]}{sys.version_info[1]}"
+    name = f"{plat}-py{tag}"
     wheelhouse = HERE / "wheelhouse" / name
     lock = HERE / "requirements" / f"{name}.lock"
     if lock.is_file() and not wheelhouse.is_dir():
-        print(f"Le dossier des paquets {wheelhouse} est absent. Vous lancez probablement "
-              "l'installeur depuis l'archive des SOURCES, qui ne contient pas les paquets : "
-              "utilisez le zip d'installation complet (graphify-local-<version>.zip), "
-              "ou construisez-le avec build_bundle.py sur une machine connectee.", file=sys.stderr)
-        return 1
+        return fail(f"le dossier des paquets {wheelhouse} est absent. Vous lancez probablement "
+                    "l'installeur depuis l'archive des SOURCES, qui ne contient pas les paquets : "
+                    "utilisez le zip d'installation, ou construisez-le avec build_bundle.py.")
     if not wheelhouse.is_dir() or not lock.is_file():
-        available = sorted(p.stem for p in (HERE / "requirements").glob(f"{plat}-py*.lock"))
-        wanted = ", ".join("Python " + a.rsplit("-py", 1)[1][0] + "." + a.rsplit("-py", 1)[1][1:] for a in available)
-        print(f"Ce bundle ne contient pas de paquets pour Python {platform.python_version()} sur {plat}. "
-              f"Versions prevues : {wanted or 'aucune'}.", file=sys.stderr)
-        return 1
+        available = sorted(p.stem.rsplit("-py", 1)[1] for p in (HERE / "requirements").glob(f"{plat}-py*.lock"))
+        wanted = ", ".join(f"Python {a[0]}.{a[1:]}" for a in available) or "aucune"
+        return fail(f"ce bundle ne contient pas de paquets pour Python {platform.python_version()} "
+                    f"sur {plat}. Versions prevues : {wanted}.")
 
-    pip_env = dict(os.environ, PIP_NO_INDEX="1", PIP_DISABLE_PIP_VERSION_CHECK="1", PIP_NO_INPUT="1")
-    dest.mkdir(parents=True, exist_ok=True)
+    python = os.path.realpath(sys.executable)
+    problem = check_python(python)
+    if problem:
+        return fail(problem)
+    exe = "graphify.exe" if sys.platform == "win32" else "graphify"
+    print(f"[install] Python utilise : {python} ({platform.python_version()})")
+    print(f"[install] dossier cree   : {DEST}")
 
-    if args.mode == "dossier":
-        print(f"[install] dossier : {dest} (plateforme {plat}, Python du poste : {sys.executable})")
-        graphify = install_dossier(dest, wheelhouse, lock, pip_env)
-        if graphify is None:
-            return 1
-        bin_dir = graphify.parent
-    else:
-        env_dir = dest / "venv"
-        print(f"[install] environnement : {env_dir} (plateforme {plat})")
-        # Comme `python -m venv` : liens symboliques sous Linux/macOS (indispensable
-        # pour les Python compiles avec libpython partagee), copie sous Windows.
-        try:
-            venv.EnvBuilder(with_pip=True, clear=env_dir.exists(), symlinks=(os.name != "nt")).create(env_dir)
-        except OSError as exc:
-            print(f"Creation de l'environnement impossible : {exc}", file=sys.stderr)
-            if getattr(exc, "winerror", None) == 1260:
-                print("Une strategie de groupe interdit d'executer la copie de python.exe. "
-                      "Relancez avec --mode dossier (mode par defaut sous Windows).", file=sys.stderr)
-            return 1
-        if sys.platform == "win32":
-            py = env_dir / "Scripts" / "python.exe"
-            graphify = env_dir / "Scripts" / "graphify.exe"
-        else:
-            py = env_dir / "bin" / "python"
-            graphify = env_dir / "bin" / "graphify"
-        res = subprocess.run(
-            [str(py), "-m", "pip", "install", "--no-index", "--only-binary=:all:", "--require-hashes",
-             "--find-links", str(wheelhouse), "-r", str(lock)],
-            env=pip_env,
-        )
-        if res.returncode != 0:
-            print("Echec de l'installation (paquet manquant ou empreinte differente).", file=sys.stderr)
-            return res.returncode
-        bin_dir = graphify.parent
-        if sys.platform != "win32":
-            bin_dir = dest / "bin"
-            bin_dir.mkdir(parents=True, exist_ok=True)
-            link = bin_dir / "graphify"
-            if link.is_symlink() or link.exists():
-                link.unlink()
-            link.symlink_to(graphify)
+    if DEST.exists() and not (DEST / MARKER).is_file():
+        return fail(f"{DEST} existe deja et n'est pas une installation graphify : "
+                    "deplacez-le ou renommez-le, puis relancez.")
 
-    if sys.platform == "win32":
-        if args.no_path:
-            path_msg = f"Ajoutez ce dossier au PATH utilisateur : {bin_dir}"
-        elif add_to_user_path_windows(bin_dir):
-            path_msg = f"{bin_dir} a ete ajoute a votre PATH (ouvrez un nouveau terminal)."
-        else:
-            path_msg = f"{bin_dir} est deja dans votre PATH."
-    else:
-        path_msg = f"Ajoutez ce dossier au PATH (par ex. dans ~/.bashrc ou ~/.zshrc) :\n  export PATH=\"{bin_dir}:$PATH\""
+    wheels = verified_wheels(wheelhouse, lock)
+    print(f"[install] {len(wheels)} paquets verifies (sha256 conformes a {lock.name})")
+    plan = [(whl, wheel_targets(whl)) for whl in wheels]
 
+    longest = max(len(rel) + (PYC_EXTRA if rel.endswith(".py") else 0) for _, items in plan for _, rel in items)
+    suffix = len(os.sep + "lib" + os.sep) + longest
+    maxlen = WIN_MAX_PATH - suffix
+    if sys.platform == "win32" and not long_paths_enabled() and len(str(DEST)) > maxlen:
+        return fail(f"le chemin {DEST} est trop long ({len(str(DEST))} caracteres, maximum {maxlen} : "
+                    "limite Windows de 260 caracteres par fichier). Placez le bundle dans un dossier "
+                    "au chemin plus court, puis relancez.")
+
+    staging = HERE / f"{NAME}.nouveau"
+    shutil.rmtree(staging, ignore_errors=True)
+    lib = staging / "lib"
+    lib.mkdir(parents=True)
+    owners: dict[str, str] = {}
+    for whl, items in plan:
+        with zipfile.ZipFile(whl) as z:
+            for info, rel in items:
+                key = rel.lower()
+                if key in owners and owners[key] != whl.name:
+                    shutil.rmtree(staging, ignore_errors=True)
+                    return fail(f"{rel} est fourni a la fois par {owners[key]} et {whl.name}")
+                owners[key] = whl.name
+                out = lib / rel
+                out.parent.mkdir(parents=True, exist_ok=True)
+                with z.open(info) as src, open(out, "wb") as dst:
+                    shutil.copyfileobj(src, dst)
+    print(f"[install] {len(owners)} fichiers decompresses dans lib/")
+    print("[install] precompilation des modules Python (peut prendre une minute)...")
+    compileall.compile_dir(str(lib), quiet=2, workers=0)
+
+    build_launcher(staging / exe, python)
+    version = read_lock(lock)["graphify-local"][0]
+    (staging / MARKER).write_text(json.dumps({
+        "version": version,
+        "plateforme": name,
+        "python": python,
+        "python_version": platform.python_version(),
+        "installe_le": datetime.datetime.now().isoformat(timespec="seconds"),
+    }, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    (staging / "LISEZMOI.txt").write_text(LISEZMOI.format(
+        version=version, exe=exe, pyver=f"{sys.version_info[0]}.{sys.version_info[1]}",
+        python=python, maxlen=maxlen), encoding="utf-8")
+
+    old = HERE / f"{NAME}.ancien"
+    shutil.rmtree(old, ignore_errors=True)
+    if DEST.exists():
+        DEST.rename(old)
+    staging.rename(DEST)
+    shutil.rmtree(old, ignore_errors=True)
+
+    graphify = DEST / exe
     print("[install] auto-controle :")
-    cmd = ["cmd", "/c", str(graphify)] if str(graphify).lower().endswith(".cmd") else [str(graphify)]
     try:
-        res = subprocess.run(cmd + ["kiro", "verify"])
+        res = subprocess.run([str(graphify), "kiro", "verify"])
     except OSError as exc:
-        print(f"Impossible de lancer graphify : {exc}", file=sys.stderr)
+        print(f"Impossible de lancer {graphify} : {exc}", file=sys.stderr)
         if getattr(exc, "winerror", None) == 1260:
-            print("Une strategie de groupe bloque ce lanceur dans ce dossier : relancez avec "
-                  "--dest <dossier ou vos scripts sont autorises>.", file=sys.stderr)
+            print("Une strategie de groupe interdit d'executer des programmes dans ce dossier. "
+                  "Placez le bundle a un endroit ou l'execution est autorisee, puis relancez.",
+                  file=sys.stderr)
         return 1
     if res.returncode != 0:
-        print("Auto-controle en echec : ne pas utiliser cette installation. Si le message parle d'une "
-              "strategie de groupe, relancez avec --dest <dossier ou vos scripts sont autorises>.",
-              file=sys.stderr)
-        return res.returncode
+        return fail("auto-controle en echec : ne pas utiliser cette installation.")
 
     print()
-    print("Installe.", path_msg)
+    print(f"Installe : {DEST}")
+    print("Ce dossier est autonome : deplacez-le ou vous voulez, puis ajoutez-le au PATH.")
+    if sys.platform == "win32":
+        print(f"(chemin complet du dossier : {maxlen} caracteres au maximum)")
+        stale = Path(os.environ.get("LOCALAPPDATA", "")) / "graphify" / "graphify.cmd"
+        if os.environ.get("LOCALAPPDATA") and stale.is_file():
+            print(f"\nATTENTION : une ancienne installation de test existe dans {stale.parent}. "
+                  "Supprimez ce dossier et retirez-le du PATH, sinon il pourrait masquer le nouveau.")
     print("Puis, dans chaque projet Kiro : graphify kiro install (ou demandez-le a Kiro), et commitez .kiro/")
     return 0
 

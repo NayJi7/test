@@ -153,6 +153,23 @@ retiré** une fois installé.
 
 **Aucune variable d'environnement ne permet de le désactiver.**
 
+**Particularités Windows** (corrigées après un essai réel sous Wine avec le
+Python Windows officiel 3.10.7) :
+- sous Windows, `subprocess.Popen` transmet à l'audit une **seule chaîne** de
+  commande et non une liste. Le verrou la découpe désormais selon les règles
+  de Windows (`_split_windows_cmdline`, inverse exact de
+  `subprocess.list2cmdline`). Sans cela, `git -C <dossier> config …` était vu
+  comme un programme inconnu et **tous les appels git de graphify étaient
+  bloqués sous Windows** (dont l'enregistrement du pilote de fusion par
+  `graphify hook install`) ;
+- Python 3.10 transmet à l'événement `_winapi.CreateProcess` une ligne de
+  commande illisible (bogue CPython, corrigé en 3.11). Le verrou lit donc la
+  vraie ligne de commande dans le code appelant : `subprocess.Popen` (elle doit
+  être identique à celle qui vient d'être contrôlée) ou `multiprocessing`
+  (processus de travail de ce même Python uniquement). Tout autre appel est
+  refusé. L'ancienne règle (« contient `--multiprocessing-fork` ») est
+  supprimée, car elle aurait accepté n'importe quel programme portant ce mot.
+
 Vérifié par les tests :
 - TCP vers Internet ou localhost, DNS, urllib, `curl`, `bash`, `os.system`,
   `git fetch`/`push`/`clone`, `python -c` arbitraire et `pip install` sont
@@ -268,9 +285,21 @@ Le skill d'origine faisait exécuter à l'agent une quinzaine de blocs
 - **`install.py`** : messages traduits, publicités app.graphify.com retirées.
   `graphify kiro install` écrit uniquement le skill, ses références et le
   steering.
-- **`hooks.py`** : suppression de la sonde qui exécutait l'interpréteur indiqué
-  dans `graphify-out/.graphify_python` (fichier commitable par un tiers). Seuls
-  l'interpréteur figé à l'installation ou le lanceur du PATH sont utilisés.
+- **`hooks.py`** :
+  - suppression de la sonde qui exécutait l'interpréteur indiqué dans
+    `graphify-out/.graphify_python` (fichier commitable par un tiers). Seuls
+    l'interpréteur figé à l'installation ou le lanceur du PATH sont utilisés ;
+  - **prise en charge du dossier portable** (voir § 9) : graphify n'y est pas
+    dans le site-packages du Python. Quand `graphify hook install` est lancé
+    depuis ce dossier (reconnu à son `graphify-local.json`), les hooks
+    reçoivent le chemin de `graphify-local/lib` (`_GFY_LIB`) et l'exportent
+    dans `PYTHONPATH`. Si le dossier a été déplacé depuis, ils le retrouvent à
+    côté du `graphify` du PATH. Le pilote de fusion de `graph.json` appelle le
+    `graphify.exe` du dossier. `graphify hook status` ignore cette valeur
+    figée, comme celle de l'interpréteur.
+- **Messages** : retrait de « Tip: set GEMINI_API_KEY… » après
+  `graphify update`, et des renvois à `graphify label` (refusé dans ce fork),
+  remplacés par `/graphify --update` dans Kiro.
 - **`cli.py`** : `_print_cloud_cta` (publicité Graphify Cloud) neutralisé.
 - **Nom de distribution** `graphify-local` (interne) : lecture de version
   (`__main__.py`, `install.py`, `export.py`, `cache.py`). Messages d'aide
@@ -314,35 +343,38 @@ Le skill d'origine faisait exécuter à l'agent une quinzaine de blocs
 - `requirements/<plateforme>-py310.lock` : version et sha256 de chaque fichier.
 - Wheel du fork **reproductible** (`SOURCE_DATE_EPOCH` fixe) : même source,
   même empreinte.
-- **Installeur** (plus de PowerShell) :
-  - `installer.py` : bibliothèque standard Python uniquement, le même pour les
-    3 systèmes. Il choisit les paquets selon le système et la version de
-    Python du poste, crée un venv dédié (liens symboliques sous Linux/macOS,
-    copie sous Windows), installe avec `--no-index --require-hashes`, puis
-    lance `graphify kiro verify`. Sous Windows, il ajoute la commande au PATH
-    de l'utilisateur (registre HKCU, sans droits administrateur ; désactivable
-    par `--no-path`).
-  - **Mode « dossier »** (défaut sous Windows, ajouté après un essai réel sur
-    un poste dont une stratégie de groupe bloquait l'exécution de la copie de
-    `python.exe` créée par le venv, erreur WinError 1260) : paquets installés
-    dans `<dest>\lib` par le pip livré avec Python (exécuté depuis son wheel,
-    sans rien installer dans le Python du poste), puis `<dest>\graphify.cmd`
-    qui lance `python -m graphify` avec le Python déjà autorisé
-    (`PYTHONPATH` limité au lanceur). Aucun exécutable créé. Testé sous Linux
-    avec Python 3.10.7 sans réseau (15/15, banc 36/36, site-packages du Python
-    du poste inchangé) ; contenu du `.cmd` vérifié en simulation. Limite : hooks
-    git non pris en charge dans ce mode.
-  - `install-windows.cmd` : double-clic. Cherche `py -3.10`, sinon `python`,
-    puis lance `installer.py`.
-  - `install-offline.sh` : Linux/macOS, cherche `python3.10` puis lance
-    `installer.py`.
-  - **Testé** sous Linux avec Python **3.10.7**, dans un espace de noms sans
-    réseau, depuis le zip : installation réussie, 15/15 contrôles, banc
-    anti-fuite 36/36. Avec un Python non prévu (3.13), il refuse avec un
-    message clair.
-  - **Partie Windows** : détection de la plateforme, dossier par défaut et
-    ajout au PATH vérifiés en simulation (registre simulé). Le `.cmd` n'a pas
-    pu être exécuté sur un vrai Windows.
+- **Installeur : une seule méthode, un dossier portable** :
+  - double-clic sur `install-windows.cmd` (Linux/macOS : `install-offline.sh`) ;
+    il prend le Python 3.10 du PATH (sinon `py -3.10`) et lance `installer.py`
+    (bibliothèque standard uniquement) ;
+  - `installer.py` crée **à côté de lui** le dossier `graphify-local/` :
+    `graphify.exe` (Linux/macOS : `graphify`), `lib/`, `graphify-local.json`,
+    `LISEZMOI.txt`. Il ne modifie ni le PATH, ni le Python du poste, ni aucun
+    autre dossier. Relancé, il remplace le dossier qu'il a créé (et refuse de
+    toucher à un dossier `graphify-local` qu'il n'a pas créé) ;
+  - **pip n'est pas utilisé** : chaque wheel est contrôlé (sha256 du `.lock`,
+    aucun paquet absent, en trop ou d'une autre version), puis décompressé dans
+    `lib/` comme le ferait pip (chemins `..` ou absolus refusés, collisions
+    refusées), puis les modules sont précompilés ;
+  - `graphify.exe` est **le lanceur standard que pip utilise** pour ses
+    commandes (`t64.exe` de distlib 0.4.0, fourni dans `launcher/` avec sa
+    licence ; empreinte vérifiée par l'installeur), suivi d'une ligne
+    `#!"<python.exe>" -I` et d'une petite archive contenant `__main__.py`. Le
+    Python est celui qui a lancé l'installeur, **en chemin absolu** : un
+    `python.exe` placé dans le dossier courant (un projet cloné, par exemple)
+    n'est jamais exécuté. `-I` ignore `PYTHONPATH`, `PYTHONHOME` et le site
+    utilisateur. `__main__.py` retrouve `lib/` à côté du lanceur, ce qui permet
+    de déplacer le dossier ;
+  - limite Windows de 260 caractères par chemin : l'installeur calcule la
+    longueur maximale du chemin du dossier (≈ 140 caractères), refuse de
+    s'installer au-delà (sauf chemins longs activés), et l'indique dans
+    `LISEZMOI.txt` ;
+  - le zip a pour dossier racine `graphify-local-<version>-installeur/`, pour
+    ne pas le confondre avec le dossier `graphify-local/` créé ;
+  - remplace les essais précédents (venv dans `%LOCALAPPDATA%`, bloqué par une
+    stratégie de groupe, erreur WinError 1260 ; puis `graphify.cmd`, sans
+    hooks). Si un ancien `%LOCALAPPDATA%\graphify\graphify.cmd` existe,
+    l'installeur le signale (il ne le supprime pas).
 - **`build_bundle.py`** (Python, fonctionne sous Windows, Linux et macOS ;
   `build-bundle.sh` n'est plus qu'une enveloppe) : reconstruction sur une
   machine connectée. Options : `--python` (défaut 3.10.7) et `--only <système>`
@@ -356,10 +388,12 @@ Le skill d'origine faisait exécuter à l'agent une quinzaine de blocs
 
 ## 10. Tests
 
-- **`tests/test_local.py`** (nouveau, 50 tests) : verrou, commandes
+- **`tests/test_local.py`** (nouveau, 57 tests) : verrou, commandes
   refusées, absence d'IA même avec des clés en environnement, secrets, HTML,
   pipeline Kiro de bout en bout (pièges compris), lecture partielle, `verify`,
-  contenu du skill, `kiro install`. **50/50 sans réseau.**
+  contenu du skill, `kiro install`, hooks du dossier portable, découpage des
+  lignes de commande Windows et contrôle de `CreateProcess`. **57/57 sans
+  réseau** (Python 3.10.7 et 3.13).
 - **`tests-fuite/bench.py`** (nouveau), banc anti-fuite :
   - corpus canari (code, md, PDF, docx, image, `.env`, raccourci Google, vidéo) ;
   - pièges : 15 variables d'IA, proxy et fournisseur local, faux `claude`,
@@ -389,6 +423,30 @@ Le skill d'origine faisait exécuter à l'agent une quinzaine de blocs
   - `test_security.py` a été adapté (tests de `safe_fetch` retirés) : 52/52.
 - **Hooks git** testés en réel avec l'installation hors ligne : la
   reconstruction après commit fonctionne avec le verrou.
+- **Après les derniers changements** (installeur portable, hooks, verrou
+  Windows) : suite complète relancée sous Python 3.10.7 et comparée test par
+  test au rapport précédent : **0 nouvel échec** (6 108 réussis, 710 échecs
+  déjà présents sur l'origine, 924 ignorés).
+- **Dossier portable, Linux (Python 3.10.7)** : installation (≈ 18 s),
+  `kiro verify` 15/15, banc anti-fuite **36/36** sur le lanceur du dossier ;
+  hooks dans un vrai dépôt git : reconstruction après commit, puis à nouveau
+  après **déplacement du dossier** (retrouvé via le PATH).
+- **Dossier portable, Windows** : testé sous **Wine 9.0 avec le Python Windows
+  officiel 3.10.7** (64 bits), installé dans un chemin contenant un espace
+  (`C:\Users\Test User\COTS\Python310_x64`), et avec MinGit 2.47.1 :
+  - `install-windows.cmd` → dossier créé, 67 paquets vérifiés, `graphify.exe`
+    (vrai lanceur distlib) fonctionne, `kiro verify` réussi ; réinstallation
+    par-dessus réussie ;
+  - dossier déplacé dans `C:\Mes Outils\`, ajouté au PATH : `graphify
+    --version`, `graphify update .`, `graphify kiro install` fonctionnent
+    depuis un autre dossier ; un faux `python.exe` placé dans le projet n'est
+    pas exécuté ;
+  - `graphify hook install` : 4 hooks + pilote de fusion enregistrés (c'est
+    ce test qui a révélé le blocage des appels git par le verrou sous Windows,
+    corrigé, voir § 3) ;
+  - reconstruction lancée exactement comme par le hook (même Python, même
+    `PYTHONPATH`, même code de lancement détaché), dossier déplacé :
+    `graph.json` mis à jour, verrou actif.
 
 ## 11. Ce qui n'est pas couvert ou pas vérifié
 
@@ -403,8 +461,12 @@ Le skill d'origine faisait exécuter à l'agent une quinzaine de blocs
   d'événement d'audit. Aucune des 67 dépendances n'est une bibliothèque
   réseau ; pour une garantie au niveau du système, ajoutez un pare-feu par
   application ou un conteneur sans réseau.
-- **Windows et macOS** : les paquets sont résolus, vérifiés (dépendances
-  complètes pour Python 3.10.7) et verrouillés pour ces plateformes, mais
-  l'installation réelle et les tests n'ont été exécutés que sous Linux.
+- **Windows** : testé sous Wine (voir § 10), pas sur un vrai poste Windows.
+  Non testable sous Wine : le script shell des hooks exécuté par Git for
+  Windows (le shell MSYS se bloque sous Wine dès qu'il crée un sous-shell,
+  limite connue de Wine) ; seule sa partie Python a été exécutée sous Wine, le
+  script lui-même a été testé sous Linux. Non testés non plus : stratégies de
+  groupe / AppLocker réelles, antivirus, Windows Terminal.
+- **macOS** : paquets résolus, vérifiés et verrouillés, installation non testée.
 - **Provenance** : les sources viennent de PyPI (sdist identique au wheel). Je
   n'ai pas pu comparer avec le dépôt GitHub `Graphify-Labs/graphify`.
