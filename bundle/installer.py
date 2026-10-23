@@ -48,6 +48,7 @@ import shutil
 import stat
 import subprocess
 import sys
+import time
 import zipfile
 from pathlib import Path, PurePosixPath
 
@@ -55,6 +56,8 @@ HERE = Path(__file__).resolve().parent
 NAME = "graphify-local"
 DEST = HERE / NAME
 MARKER = "graphify-local.json"
+# Present tant que l'installation n'est pas terminee (supprime a la fin).
+IN_PROGRESS = "INSTALLATION-INCOMPLETE.txt"
 # Lanceur distlib 0.4.0 (distlib/t64.exe du wheel distlib-0.4.0-py2.py3-none-any.whl,
 # sha256 du wheel 9659f7d87e46584a30b5780e43ac7a2143098441670ff0a49d5f9034c54a6c16).
 LAUNCHER_SHA256 = "81a618f21cb87db9076134e70388b6e9cb7c2106739011b6a51772d22cae06b7"
@@ -219,6 +222,24 @@ def build_launcher(target: Path, python: str) -> None:
         target.chmod(target.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
 
+def remove_tree(path: Path) -> bool:
+    """Supprime un dossier cree par l'installeur, en reessayant pendant ~20 s :
+    sous Windows, un antivirus qui analyse encore des fichiers neufs les garde
+    ouverts quelques secondes (erreur "Acces refuse")."""
+    def onerror(func, target, _exc):
+        try:
+            os.chmod(target, stat.S_IWRITE)
+            func(target)
+        except OSError:
+            pass
+    for attempt in range(20):
+        shutil.rmtree(path, onerror=onerror)
+        if not path.exists():
+            return True
+        time.sleep(1)
+    return False
+
+
 def check_python(python: str) -> str | None:
     if sys.maxsize <= 2 ** 32:
         return "ce Python est en 32 bits ; graphify a besoin de Python 3.10 en 64 bits."
@@ -254,7 +275,7 @@ def main() -> int:
     print(f"[install] Python utilise : {python} ({platform.python_version()})")
     print(f"[install] dossier cree   : {DEST}")
 
-    if DEST.exists() and not (DEST / MARKER).is_file():
+    if DEST.exists() and not ((DEST / MARKER).is_file() or (DEST / IN_PROGRESS).is_file()):
         return fail(f"{DEST} existe deja et n'est pas une installation graphify : "
                     "deplacez-le ou renommez-le, puis relancez.")
 
@@ -270,17 +291,28 @@ def main() -> int:
                     "limite Windows de 260 caracteres par fichier). Placez le bundle dans un dossier "
                     "au chemin plus court, puis relancez.")
 
-    staging = HERE / f"{NAME}.nouveau"
-    shutil.rmtree(staging, ignore_errors=True)
-    lib = staging / "lib"
+    # Restes eventuels d'une version precedente de l'installeur.
+    for leftover in (HERE / f"{NAME}.nouveau", HERE / f"{NAME}.ancien"):
+        if leftover.exists() and not remove_tree(leftover):
+            print(f"[install] (impossible de supprimer {leftover} : supprimez-le a la main)")
+    # Installation directement dans le dossier final : pas de renommage de
+    # dossier a la fin (refuse par Windows tant qu'un antivirus analyse les
+    # fichiers qui viennent d'etre ecrits).
+    if DEST.exists():
+        print("[install] suppression de l'installation precedente...")
+        if not remove_tree(DEST):
+            return fail(f"impossible de supprimer l'installation precedente {DEST} : un fichier est "
+                        "encore ouvert (graphify en cours d'utilisation, ou analyse antivirus). "
+                        "Fermez les terminaux qui utilisent graphify, puis relancez.")
+    lib = DEST / "lib"
     lib.mkdir(parents=True)
+    (DEST / IN_PROGRESS).write_text("Installation interrompue : relancez l'installeur.\n", encoding="utf-8")
     owners: dict[str, str] = {}
     for whl, items in plan:
         with zipfile.ZipFile(whl) as z:
             for info, rel in items:
                 key = rel.lower()
                 if key in owners and owners[key] != whl.name:
-                    shutil.rmtree(staging, ignore_errors=True)
                     return fail(f"{rel} est fourni a la fois par {owners[key]} et {whl.name}")
                 owners[key] = whl.name
                 out = lib / rel
@@ -291,25 +323,19 @@ def main() -> int:
     print("[install] precompilation des modules Python (peut prendre une minute)...")
     compileall.compile_dir(str(lib), quiet=2, workers=0)
 
-    build_launcher(staging / exe, python)
+    build_launcher(DEST / exe, python)
     version = read_lock(lock)["graphify-local"][0]
-    (staging / MARKER).write_text(json.dumps({
+    (DEST / "LISEZMOI.txt").write_text(LISEZMOI.format(
+        version=version, exe=exe, pyver=f"{sys.version_info[0]}.{sys.version_info[1]}",
+        python=python, maxlen=maxlen), encoding="utf-8")
+    (DEST / MARKER).write_text(json.dumps({
         "version": version,
         "plateforme": name,
         "python": python,
         "python_version": platform.python_version(),
         "installe_le": datetime.datetime.now().isoformat(timespec="seconds"),
     }, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    (staging / "LISEZMOI.txt").write_text(LISEZMOI.format(
-        version=version, exe=exe, pyver=f"{sys.version_info[0]}.{sys.version_info[1]}",
-        python=python, maxlen=maxlen), encoding="utf-8")
-
-    old = HERE / f"{NAME}.ancien"
-    shutil.rmtree(old, ignore_errors=True)
-    if DEST.exists():
-        DEST.rename(old)
-    staging.rename(DEST)
-    shutil.rmtree(old, ignore_errors=True)
+    (DEST / IN_PROGRESS).unlink()
 
     graphify = DEST / exe
     print("[install] auto-controle :")
