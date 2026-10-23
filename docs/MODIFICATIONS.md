@@ -349,7 +349,7 @@ Le skill d'origine faisait exécuter à l'agent une quinzaine de blocs
     (bibliothèque standard uniquement) ;
   - `installer.py` crée **à côté de lui** le dossier `graphify-local/` :
     `graphify.exe` (Linux/macOS : `graphify`), `lib/`, `graphify-local.json`,
-    `LISEZMOI.txt`. Il ne modifie ni le PATH, ni le Python du poste, ni aucun
+    `README.txt`. Il ne modifie ni le PATH, ni le Python du poste, ni aucun
     autre dossier. Relancé, il remplace le dossier qu'il a créé (et refuse de
     toucher à un dossier `graphify-local` qu'il n'a pas créé) ;
   - **pip n'est pas utilisé** : chaque wheel est contrôlé (sha256 du `.lock`,
@@ -368,7 +368,7 @@ Le skill d'origine faisait exécuter à l'agent une quinzaine de blocs
   - limite Windows de 260 caractères par chemin : l'installeur calcule la
     longueur maximale du chemin du dossier (≈ 140 caractères), refuse de
     s'installer au-delà (sauf chemins longs activés), et l'indique dans
-    `LISEZMOI.txt` ;
+    `README.txt` ;
   - le zip a pour dossier racine `graphify-local-<version>-installeur/`, pour
     ne pas le confondre avec le dossier `graphify-local/` créé ;
   - remplace les essais précédents (venv dans `%LOCALAPPDATA%`, bloqué par une

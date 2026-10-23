@@ -11,7 +11,7 @@ Une seule methode d'installation : l'installeur cree, A COTE DE LUI, un dossier
         graphify.exe        (Windows ; `graphify` sous Linux/macOS) : la commande
         lib/                graphify + ses 66 dependances, deja decompresses
         graphify-local.json version, Python utilise, date
-        LISEZMOI.txt
+        README.txt
 
 Ce dossier peut ensuite etre deplace n'importe ou sur le poste, puis ajoute au
 PATH : `graphify` fonctionne alors comme apres un `pip install`. L'installeur
@@ -85,7 +85,7 @@ from graphify.__main__ import main
 sys.exit(main())
 '''
 
-LISEZMOI = """\
+README = """\
 graphify (graphify-local {version}) - dossier portable
 =====================================================
 
@@ -325,7 +325,7 @@ def main() -> int:
 
     build_launcher(DEST / exe, python)
     version = read_lock(lock)["graphify-local"][0]
-    (DEST / "LISEZMOI.txt").write_text(LISEZMOI.format(
+    (DEST / "README.txt").write_text(README.format(
         version=version, exe=exe, pyver=f"{sys.version_info[0]}.{sys.version_info[1]}",
         python=python, maxlen=maxlen), encoding="utf-8")
     (DEST / MARKER).write_text(json.dumps({

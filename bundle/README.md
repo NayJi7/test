@@ -39,7 +39,7 @@ Une seule méthode :
        graphify.exe          la commande (Linux/macOS : graphify)
        lib\                  graphify et ses 66 dépendances
        graphify-local.json   version, Python utilisé
-       LISEZMOI.txt
+       README.txt
    ```
 3. Déplacer ce dossier où vous voulez, puis **l'ajouter au PATH** ; ouvrir un
    nouveau terminal. `graphify` s'utilise alors comme après un `pip install`.
@@ -64,7 +64,7 @@ Limites :
 - si le Python du poste est déplacé ou désinstallé, relancez l'installeur ;
 - Windows limite les chemins à 260 caractères : le chemin complet du dossier
   `graphify-local` ne doit pas dépasser la longueur indiquée à la fin de
-  l'installation et dans `LISEZMOI.txt` (≈ 140 caractères), sauf si les
+  l'installation et dans `README.txt` (≈ 140 caractères), sauf si les
   chemins longs sont activés sur le poste.
 
 ### Hooks git
