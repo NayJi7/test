@@ -7,3 +7,6 @@ bundle/.build-venv/
 graphify-out/
 *.zip
 *.zip.sha256
+bundle/graphify-local/
+bundle/graphify-local.nouveau/
+bundle/graphify-local.ancien/
