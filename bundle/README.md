@@ -1,4 +1,4 @@
-# graphify - bundle interne d'installation hors ligne (graphify-local 0.9.93.1)
+# graphify - installation interne par pip (graphify-local 0.9.93.1)
 
 Fork de `graphifyy` 0.9.93 qui **ne peut rien envoyer hors de la machine** :
 aucun appel à une IA externe, aucun téléchargement, aucun serveur, et un verrou
@@ -11,97 +11,54 @@ reconfiguré.
 
 | Élément | Rôle |
 |---|---|
-| `install-windows.cmd` | Installation Windows : double-clic (pas de PowerShell) |
-| `install-offline.sh` | Installation Linux / macOS |
-| `installer.py` | L'installeur lui-même (bibliothèque standard Python uniquement), appelé par les deux fichiers ci-dessus |
-| `launcher/t64.exe` | Le lanceur `.exe` standard de pip (distlib 0.4.0, licence dans `launcher/`) qui devient `graphify.exe` |
-| `wheelhouse/<plateforme>-py310/` | Les 67 paquets nécessaires (graphify + dépendances), précompilés pour Python 3.10, pour Linux x86_64, Windows x64 et macOS Apple Silicon |
-| `requirements/<plateforme>-py310.lock` | Version exacte et empreinte sha256 de chacun de ces 67 fichiers |
-| `outils/banc-anti-fuite.py` | Banc anti-fuite (Linux, `strace`) |
+| `paquet-pip/` | **Le paquet à livrer aux postes** (≈ 2,3 Mo) : `graphify_local-0.9.93.1-py3-none-any.whl` (graphify-local, absent de PyPI), `requirements.txt` (ce fichier + les 66 dépendances, versions et empreintes sha256 figées) et `install-pip.cmd` (double-clic) |
+| `requirements/windows-amd64-py310.lock` | Versions et empreintes sha256 de référence (Windows, Python 3.10) |
+| `build_bundle.py`, `scripts/` | Reconstruction du paquet sur une machine connectée (voir § 6) |
 
-Aucune des 67 dépendances n'est une bibliothèque réseau : pas de `requests`,
+Aucune des 66 dépendances n'est une bibliothèque réseau : pas de `requests`,
 `httpx`, `urllib3`, `openai`, `anthropic`, `boto3`, `mcp`, `huggingface_hub`,
 `yt-dlp`…
 
-## 1. Installer (sur chaque poste, sans réseau)
+## 1. Installer (sur chaque poste Windows)
 
-Prérequis : **Python 3.10 64 bits** dans le PATH (testé avec 3.10.7 ; tout
-3.10.x convient). Il n'est pas modifié.
+Prérequis :
+- **Python 3.10 64 bits** dans le PATH (testé avec 3.10.7 ; tout 3.10.x convient), avec pip ;
+- accès à PyPI, ou à un miroir d'entreprise configuré dans `pip.ini`.
 
-Une seule méthode :
-
-1. Décompresser le zip à un endroit où l'exécution de programmes est autorisée.
-2. **Double-cliquer sur `install-windows.cmd`** (Linux/macOS : `bash install-offline.sh`).
-   Un dossier **`graphify-local`** est créé à côté :
-
-   ```
-   graphify-local\
-       graphify.exe          la commande (Linux/macOS : graphify)
-       lib\                  graphify et ses 66 dépendances
-       graphify-local.json   version, Python utilisé
-       README.txt
-   ```
-3. Déplacer ce dossier où vous voulez, puis **l'ajouter au PATH** ; ouvrir un
-   nouveau terminal. `graphify` s'utilise alors comme après un `pip install`.
-
-L'installeur :
-1. choisit les paquets correspondant au système et à la version de Python du
-   poste (message clair si la version n'est pas prévue dans le bundle) ;
-2. vérifie l'empreinte sha256 de chaque paquet par rapport au `.lock` et
-   refuse tout fichier absent, en trop ou différent (rien n'est installé dans ce cas) ;
-3. décompresse les paquets dans `graphify-local\lib` (pip n'est pas utilisé,
-   rien n'est téléchargé) ;
-4. crée `graphify.exe` : le lanceur standard de pip, qui démarre **le Python
-   qui a lancé l'installeur** (chemin absolu inscrit dans le lanceur, jamais un
-   `python.exe` du dossier courant), en mode isolé (`-I`). Le dossier `lib\`
-   est retrouvé à côté du lanceur : déplacer le dossier ne casse rien ;
-5. termine par `graphify kiro verify`, qui doit afficher « vérification réussie ».
-
-Il ne modifie ni le PATH, ni le Python du poste, ni aucun autre dossier.
-Relancer l'installeur remplace le dossier `graphify-local` qu'il a créé.
-
-Limites :
-- si le Python du poste est déplacé ou désinstallé, relancez l'installeur ;
-- Windows limite les chemins à 260 caractères : le chemin complet du dossier
-  `graphify-local` ne doit pas dépasser la longueur indiquée à la fin de
-  l'installation et dans `README.txt` (≈ 140 caractères), sauf si les
-  chemins longs sont activés sur le poste.
-
-### Variante légère : installation par pip (Windows)
-
-Le dossier `paquet-pip/` (ou le zip `graphify-local-<version>-pip.zip`,
-≈ 2,3 Mo) contient seulement trois fichiers : le paquet graphify-local
-(`.whl`), `requirements.txt` et `install-pip.cmd`. Double-cliquer sur
-`install-pip.cmd` lance :
+Copier le dossier `paquet-pip` (ou le zip `graphify-local-0.9.93.1-pip.zip`)
+sur le poste, puis **double-cliquer sur `install-pip.cmd`**. Il lance :
 
 ```
 python -m pip install --require-hashes --only-binary=:all: --disable-pip-version-check --no-warn-script-location -r requirements.txt
 ```
 
-puis `python -m graphify kiro verify`.
+puis `python -m graphify kiro verify`, qui doit afficher « verification passed ».
 
-- graphify-local est pris dans le fichier `.whl` local (jamais sur PyPI) ;
-  les 66 dépendances sont téléchargées par pip depuis PyPI (ou le miroir
-  configuré dans `pip.ini`), aux versions et empreintes sha256 figées : tout
-  fichier différent est refusé, et rien n'est installé ;
+- graphify-local est pris dans le fichier `.whl` local, jamais sur PyPI ;
+- les 66 dépendances sont téléchargées par pip, aux versions et empreintes
+  sha256 figées : tout fichier différent est refusé, et rien n'est installé ;
+- `--only-binary=:all:` : aucun script d'installation n'est exécuté, pip ne
+  fait que copier des fichiers déjà compilés ;
 - la commande `graphify` est créée dans le dossier `Scripts` de ce Python
-  (affiché à la fin), comme pour tout `pip install` ; les hooks git
-  fonctionnent normalement ;
-- prérequis : pip présent dans le Python 3.10, accès à PyPI ou à un miroir ;
-- limites par rapport au dossier portable : graphify est installé dans le
-  Python du poste. Un `pip install graphifyy` (graphify d'origine) dans ce
-  même Python l'écraserait sans prévenir ; `graphify kiro verify` échoue
-  alors. D'autres installations pip peuvent aussi changer les versions des
-  dépendances. PyPI voit l'adresse IP et la liste des paquets demandés.
+  (affiché à la fin) : l'ajouter au PATH si `graphify` n'est pas reconnu, puis
+  ouvrir un nouveau terminal.
+
+Limites :
+- graphify est installé dans le Python du poste. Un `pip install graphifyy`
+  (graphify d'origine) dans ce même Python l'écraserait sans prévenir ;
+  `graphify kiro verify` échoue alors. D'autres installations pip peuvent
+  aussi changer les versions des dépendances ;
+- PyPI (ou le miroir) voit l'adresse IP et la liste des paquets demandés ;
+- si pip affiche « from versions: none », il ne joint pas son index (proxy,
+  certificat, miroir incomplet) : `python -m pip config debug` et
+  `python -m pip download beautifulsoup4==4.15.0 --no-deps -d %TEMP%\pip-test -v`
+  indiquent la cause.
 
 ### Hooks git
 
-`graphify hook install` fonctionne avec ce dossier : les hooks retrouvent
-graphify dans `graphify-local\lib` (chemin inscrit à l'installation du hook,
-ou, si le dossier a été déplacé depuis, à côté du `graphify` du PATH). Après
-un déplacement du dossier, relancez `graphify hook install` dans le projet
-pour mettre à jour le pilote de fusion de `graph.json` (les hooks, eux,
-continuent de fonctionner via le PATH).
+`graphify hook install` dans un projet installe les hooks (post-commit,
+post-checkout, post-merge, post-rewrite) et le pilote de fusion de
+`graph.json`. Ils utilisent le Python dans lequel graphify est installé.
 
 ## 2. Brancher un projet sur Kiro
 
@@ -145,35 +102,31 @@ graphify explain "Client"
 ## 5. Vérifier à tout moment
 
 ```bash
-graphify kiro verify                          # auto-contrôle de l'installation
-python3 -I outils/banc-anti-fuite.py $(which graphify)   # banc anti-fuite complet (Linux, strace)
+graphify kiro verify                                   # auto-contrôle de l'installation
+python3 -I tests-fuite/bench.py $(which graphify)      # banc anti-fuite complet (Linux, strace)
 ```
 
-## 6. Construire ou mettre à jour le bundle
+## 6. Reconstruire le paquet pip
 
-Sur une machine **connectée** (Windows, Linux ou macOS, Python ≥ 3.10), depuis
-le dossier source complet `graphify-local/` (archive des sources : `fork/` +
-`bundle/`) :
+Après une modification du code (`fork/`), sur une machine **connectée**
+(Windows, Linux ou macOS, Python ≥ 3.10) :
 
 ```bash
 cd bundle
-python build_bundle.py                        # zip pour les 3 systèmes (≈ 350 Mo)
-python build_bundle.py --only windows-amd64   # zip Windows seul (≈ 110 Mo)
-python build_bundle.py --python 3.10.7        # version de Python des postes (défaut 3.10.7)
+python build_bundle.py                        # postes en Python 3.10.7 (défaut)
+python build_bundle.py --python 3.10.7
 ```
 
-Le zip produit (`graphify-local-<version>.zip` ou
-`graphify-local-<version>-windows-amd64-py310.zip`) est celui à diffuser aux
-postes : lui seul contient les paquets (`wheelhouse/`). **L'archive des
-sources ne contient pas les paquets** ; l'installeur le signale si on la lance
-par erreur.
+Le script construit le wheel graphify-local de façon reproductible (même
+source = même empreinte), télécharge les dépendances Windows dans
+`wheelhouse/` (cache local, jamais livré) pour en calculer les empreintes,
+vérifie que toutes les dépendances requises sont présentes, régénère le
+`.lock` en affichant les différences (« aucune » = fichiers identiques), puis
+met à jour `paquet-pip/` et produit `graphify-local-<version>-pip.zip`.
 
-Les versions des dépendances restent figées par les `.lock` existants ; le
-script vérifie que toutes les dépendances requises pour la version de Python
-et chaque système sont présentes, puis affiche les différences d'empreintes
-(« aucune » = fichiers identiques). Pour changer volontairement une
-dépendance, supprimez le `.lock` concerné, relancez, relisez le diff, puis
-relancez le banc anti-fuite.
+Les versions restent figées par le `.lock` existant. Pour changer
+volontairement une dépendance, supprimez le `.lock`, relancez, relisez le
+diff, puis relancez le banc anti-fuite.
 
 ## Documents qui contiennent un secret
 

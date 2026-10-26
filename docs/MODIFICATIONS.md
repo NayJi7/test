@@ -334,6 +334,21 @@ Le skill d'origine faisait exécuter à l'agent une quinzaine de blocs
 
 ## 9. Bundle (dossier `bundle/`) - cible Python 3.10 (testé avec 3.10.7)
 
+> **État actuel : seule l'installation par pip est livrée** (`bundle/paquet-pip/` :
+> wheel graphify-local + `requirements.txt` à versions et empreintes figées +
+> `install-pip.cmd`). L'installation hors ligne (paquets dans `wheelhouse/`,
+> `installer.py`, dossier portable avec `graphify.exe`, `install-windows.cmd`,
+> `install-offline.sh`, `launcher/`) a été **retirée du dépôt**, ainsi que les
+> verrous Linux et macOS. Les paragraphes ci-dessous qui la décrivent sont
+> conservés comme historique des essais. `build_bundle.py` ne produit plus
+> que le paquet pip Windows ; `wheelhouse/` n'y est qu'un cache local. La prise
+> en charge du dossier portable reste dans `hooks.py` (inactive sans le
+> fichier `graphify-local.json` créé par l'ancien installeur).
+> `build_bundle.py` normalise les droits des fichiers du fork (644, ou 755 pour
+> un exécutable) avant de construire le wheel : vérifié depuis une copie propre
+> du dépôt, la reconstruction redonne exactement le même wheel, le même
+> `requirements.txt` et le même zip.
+
 - **67 paquets par plateforme** (Linux x86_64, Windows x64, macOS arm64), tous
   précompilés pour CPython 3.10. **Aucune bibliothèque réseau parmi eux.**
   Versions adaptées à 3.10 : numpy 2.2.6, scipy 1.15.3, networkx 3.4.2,

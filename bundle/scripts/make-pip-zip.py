@@ -9,7 +9,8 @@ Contenu, sous un dossier racine graphify-local-<version>-pip/ :
   empreinte sha256 figees (copie de requirements/windows-amd64-py310.lock, ou
   la ligne graphify-local pointe sur le fichier local : pip ne le cherche donc
   jamais sur PyPI) ;
-- install-pip.cmd : la commande pip a lancer (double-clic).
+- install-pip.cmd : la commande pip a lancer (double-clic), lue dans
+  paquet-pip/ (seul exemplaire du fichier).
 
 Les dependances sont telechargees par pip depuis PyPI (ou le miroir configure
 dans pip.ini) au moment de l'installation.
@@ -44,7 +45,7 @@ requirements = requirements.replace(
 
 root = f"graphify-local-{version}-pip"
 archive = ROOT / f"{root}.zip"
-cmd = (ROOT / "install-pip.cmd").read_bytes()
+cmd = (ROOT / "paquet-pip" / "install-pip.cmd").read_bytes()
 archive.unlink(missing_ok=True)
 with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as z:
     for arc, data in ((wheel_name, wheel.read_bytes()),
@@ -61,7 +62,6 @@ if lock_name == "windows-amd64-py310":
         old.unlink()
     (folder / wheel_name).write_bytes(wheel.read_bytes())
     (folder / "requirements.txt").write_bytes(requirements.encode("utf-8"))
-    (folder / "install-pip.cmd").write_bytes(cmd)
 zdigest = hashlib.sha256(archive.read_bytes()).hexdigest()
 (ROOT / f"{archive.name}.sha256").write_text(f"{zdigest}  {archive.name}\n", encoding="utf-8")
 print(f"[build] archive : {archive} ({archive.stat().st_size / 1e6:.1f} Mo)\n{zdigest}  {archive.name}")

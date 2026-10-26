@@ -1,24 +1,24 @@
-"""graphify-local - (re)construction du bundle interne (Windows, Linux, macOS).
+"""graphify-local - (re)construction du paquet pip (Windows, Python 3.10).
 
-A lancer sur une machine CONNECTEE : c'est la seule etape qui telecharge
-quelque chose (les paquets depuis PyPI). Necessite Python >= 3.10.
+A lancer sur une machine CONNECTEE (Windows, Linux ou macOS, Python >= 3.10).
 
 Usage (depuis le dossier bundle/) :
     python build_bundle.py                       # fork dans ../fork, postes en Python 3.10.7
     python build_bundle.py --fork ../fork --python 3.10.7
-    python build_bundle.py --only windows-amd64  # ne construit que le zip Windows
 
 Etapes :
 1. Construit le wheel graphify-local depuis les sources du fork, de facon
    reproductible (SOURCE_DATE_EPOCH fixe : meme source => meme empreinte).
-2. Telecharge les dependances precompilees pour chaque systeme cible et la
-   version de Python des postes. Si requirements/<systeme>-py<XY>.lock existe,
-   ses versions sont imposees (aucune derive). Pour mettre a jour volontairement
-   une dependance, supprimez le .lock concerne puis relisez le diff affiche.
+2. Telecharge dans wheelhouse/ (cache de construction, jamais livre) les
+   dependances precompilees pour Windows et la version de Python des postes,
+   afin d'en calculer les empreintes. Si requirements/windows-amd64-py<XY>.lock
+   existe, ses versions sont imposees (aucune derive). Pour mettre a jour
+   volontairement une dependance, supprimez le .lock puis relisez le diff affiche.
 3. Verifie que toutes les dependances requises par la cible sont presentes
    (scripts/complete-wheelhouse.py ; ex. `tomli` sous Python 3.10).
-4. Regenere les .lock (version + sha256) et affiche les differences.
-5. Produit le(s) zip d'installation (+ empreinte .sha256).
+4. Regenere le .lock (version + sha256) et affiche les differences.
+5. Met a jour paquet-pip/ (wheel + requirements.txt) et produit
+   graphify-local-<version>-pip.zip (+ empreinte .sha256).
 """
 from __future__ import annotations
 
@@ -33,7 +33,7 @@ import venv
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-PLATFORMS = ["linux-x86_64", "windows-amd64", "macos-arm64"]
+PLATFORMS = ["windows-amd64"]
 TAGS = {
     "linux-x86_64": ["manylinux2014_x86_64", "manylinux_2_17_x86_64", "manylinux_2_28_x86_64", "manylinux1_x86_64",
                      "manylinux2010_x86_64", "manylinux_2_5_x86_64", "manylinux_2_12_x86_64"],
@@ -52,14 +52,13 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--fork", type=Path, default=HERE.parent / "fork")
     ap.add_argument("--python", default="3.10.7", help="version de Python des postes (defaut 3.10.7)")
-    ap.add_argument("--only", choices=PLATFORMS, action="append", help="systeme(s) a construire (defaut : tous)")
     args = ap.parse_args()
 
     fork = args.fork.resolve()
     full = args.python
     major, minor = full.split(".")[:2]
     pytag, abi = f"py{major}{minor}", f"cp{major}{minor}"
-    platforms = args.only or PLATFORMS
+    platforms = PLATFORMS
     m = re.search(r'^version = "([^"]+)"', (fork / "pyproject.toml").read_text(encoding="utf-8"), re.M)
     if not m:
         raise SystemExit("version introuvable dans pyproject.toml")
@@ -74,6 +73,12 @@ def main() -> int:
     print(f"[build] wheel graphify-local {version} depuis {fork} (postes : Python {full})")
     for d in ("build", "dist"):
         shutil.rmtree(fork / d, ignore_errors=True)
+    # Droits normalises (le wheel les enregistre) : meme source => meme empreinte,
+    # quels que soient l'umask ou l'outil d'extraction (git archive, zip...).
+    if os.name != "nt":
+        for f in [*fork.glob("*"), *(fork / "graphify").rglob("*")]:
+            if f.is_file():
+                f.chmod(0o755 if f.stat().st_mode & 0o111 else 0o644)
     env = dict(os.environ, SOURCE_DATE_EPOCH=os.environ.get("SOURCE_DATE_EPOCH", "1792800000"))
     run([bpy, "-m", "build", "--wheel", "--no-isolation"], cwd=fork, env=env)
     wheelhouse = HERE / "wheelhouse"
@@ -123,12 +128,8 @@ def main() -> int:
         for line in diff[2:]:
             print("   ", line)
 
-    # 5. Zip(s)
-    if args.only:
-        for plat in platforms:
-            run([sys.executable, "-I", HERE / "scripts" / "make-zip.py", version, "--only", f"{plat}-{pytag}"])
-    else:
-        run([sys.executable, "-I", HERE / "scripts" / "make-zip.py", version])
+    # 5. Paquet pip
+    run([sys.executable, "-I", HERE / "scripts" / "make-pip-zip.py", version, "--lock", f"windows-amd64-{pytag}"])
     return 0
 
 
