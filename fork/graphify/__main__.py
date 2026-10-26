@@ -225,7 +225,7 @@ def _check_skill_version(skill_dst: Path, platform_names: "list[str] | None" = N
             print(
                 f"  warning: skill is from graphify {installed}, but the package is "
                 f"{__version__} (older). Upgrade the package "
-                f"(reinstallez le bundle interne graphify); "
+                f"(reinstall the internal graphify bundle); "
                 f"running 'graphify install' would downgrade the skill.",
                 file=sys.stderr,
             )
@@ -1000,8 +1000,8 @@ def _run_cli() -> None:
     }
     if cmd in _other_platforms:
         print(
-            f"graphify: l'integration '{cmd}' est desactivee ; seul Kiro "
-            "est pris en charge (`graphify kiro install`).",
+            f"graphify: the '{cmd}' integration is disabled; only Kiro "
+            "is supported (`graphify kiro install`).",
             file=sys.stderr,
         )
         sys.exit(2)
@@ -1014,8 +1014,8 @@ def _run_cli() -> None:
                 _plat = sys.argv[_i + 3]
         if _plat != "kiro":
             print(
-                "graphify: seule la plateforme Kiro est prise en charge ; "
-                "utilisez `graphify kiro install` (ou `graphify install --platform kiro`).",
+                "graphify: only the Kiro platform is supported; "
+                "use `graphify kiro install` (or `graphify install --platform kiro`).",
                 file=sys.stderr,
             )
             sys.exit(2)

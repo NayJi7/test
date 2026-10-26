@@ -17,9 +17,9 @@ from __future__ import annotations
 from graphify.file_slice import unit_path
 
 DISABLED_MESSAGE = (
-    "graphify: aucun backend LLM n'est disponible. L'extraction "
-    "semantique et le nommage des communautes passent uniquement par Kiro "
-    "(/graphify dans Kiro, commandes `graphify kiro prepare|finalize|labels`)."
+    "graphify: no LLM backend is available. Semantic extraction and "
+    "community naming go through Kiro only "
+    "(/graphify in Kiro, `graphify kiro prepare|finalize|labels` commands)."
 )
 
 
@@ -192,7 +192,7 @@ def backend_disabled_by_env() -> bool:
 
 
 def detect_backend_with_source() -> "tuple[str | None, str]":
-    return None, "aucun backend LLM (Kiro uniquement)"
+    return None, "no LLM backend (Kiro only)"
 
 
 def detect_backend() -> str | None:
@@ -254,8 +254,8 @@ def generate_community_labels(G, communities, *args, quiet: bool = False, **kwar
     if not quiet:
         import sys
         print(
-            "[graphify label] pas de nommage par LLM ; "
-            "libelles deterministes conserves (noms finaux via `graphify kiro labels`).",
+            "[graphify label] no LLM naming; "
+            "deterministic labels kept (final names via `graphify kiro labels`).",
             file=sys.stderr,
         )
     return _placeholder_community_labels(communities), "placeholder"

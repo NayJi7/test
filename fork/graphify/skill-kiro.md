@@ -76,7 +76,7 @@ directement a l'etape 3.
 graphify kiro status
 ```
 
-Si des lots sont MANQUANTS, relance une seule fois le sous-agent pour ces lots,
+Si des lots sont marques `MISSING`, relance une seule fois le sous-agent pour ces lots,
 puis continue (les fichiers manquants seront retentes au prochain `--update`).
 
 ### Etape 4 - Assembler le graphe
@@ -92,7 +92,7 @@ rejetes, elements ecartes, lectures partielles).
 ### Etape 5 - Nommer les communautes
 
 `finalize` affiche les communautes et leurs principaux membres. Pour chacune
-(hors celles marquees `[deja nomme]`, sauf si le contenu a clairement change),
+(hors celles marquees `[already named]`, sauf si le contenu a clairement change),
 choisis un nom de 2 a 5 mots decrivant le sujet (ex. « Facturation clients »,
 « Equipe support », « Projet Atlas »). Ecris le fichier
 `graphify-out/kiro/labels.json` sous la forme `{"0": "Nom", "1": "Nom"}` puis :

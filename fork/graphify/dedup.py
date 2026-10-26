@@ -1544,5 +1544,5 @@ def _llm_tiebreak(
     # graphify-local: le departage des doublons par LLM est supprime
     # (il envoyait des paires de libelles a un fournisseur d'IA externe).
     # Les paires ambigues restent separees, comme sans --dedup-llm.
-    print("[graphify] --dedup-llm desactive dans cette version de graphify (aucun appel LLM).", flush=True)
+    print("[graphify] --dedup-llm is disabled in this graphify build (no LLM calls).", flush=True)
     return

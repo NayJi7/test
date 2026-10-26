@@ -8,8 +8,8 @@
 from __future__ import annotations
 
 _PUSH_DISABLED = (
-    "graphify: l'envoi reseau vers une base de graphes est desactive. "
-    "Generez un fichier Cypher local avec `graphify export neo4j` (sans --push)."
+    "graphify: sending to a graph database over the network is disabled. "
+    "Write a local Cypher file with `graphify export neo4j` (without --push)."
 )
 
 

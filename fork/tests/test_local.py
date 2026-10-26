@@ -125,7 +125,7 @@ def test_allowed_programs_still_run(tmp_path):
 def test_network_or_llm_commands_are_refused(tmp_path, args):
     res = run_graphify(*args, cwd=tmp_path)
     assert res.returncode == 2, res.stdout + res.stderr
-    assert "fonction desactivee" in res.stderr or "seul Kiro" in res.stderr or "seule la plateforme Kiro" in res.stderr
+    assert "feature disabled" in res.stderr or "only Kiro" in res.stderr or "only the Kiro platform" in res.stderr
 
 
 def test_mcp_server_entrypoint_is_disabled():
@@ -187,7 +187,7 @@ def test_extract_with_docs_and_api_key_indexes_code_only(tmp_path):
     (tmp_path / "notes.md").write_text("# Notes\nClient confidentiel.\n", encoding="utf-8")
     res = run_graphify("extract", ".", "--no-cluster", cwd=tmp_path, env={"OPENAI_API_KEY": "sk-fake"})
     assert res.returncode == 0, res.stdout + res.stderr
-    assert "indexation du code seulement" in res.stdout
+    assert "indexing code only" in res.stdout
     graph = json.loads((tmp_path / "graphify-out" / "graph.json").read_text(encoding="utf-8"))
     assert not any(n.get("source_file", "").endswith("notes.md") for n in graph["nodes"])
 
@@ -310,7 +310,7 @@ def test_kiro_pipeline_end_to_end(tmp_path):
     ])
     res = run_graphify("kiro", "finalize", cwd=tmp_path)
     assert res.returncode == 0, res.stdout + res.stderr
-    assert "ecarte" in res.stdout and "hors du lot" in res.stdout and "relation invalide" in res.stdout
+    assert "dropped" in res.stdout and "outside the chunk" in res.stdout and "invalid relation" in res.stdout
     graph = json.loads((tmp_path / "graphify-out" / "graph.json").read_text(encoding="utf-8"))
     labels = {n["label"] for n in graph["nodes"]}
     assert "Alice - facturation" in labels and "Bob - support" in labels
@@ -326,7 +326,7 @@ def test_kiro_pipeline_end_to_end(tmp_path):
 
     # Mise a jour incrementale : rien n'a change.
     res = run_graphify("kiro", "prepare", ".", "--update", cwd=tmp_path)
-    assert res.returncode == 0 and "rien a faire" in res.stdout
+    assert res.returncode == 0 and "nothing to do" in res.stdout
 
 
 def test_kiro_partial_read_is_retried(tmp_path):
@@ -338,15 +338,15 @@ def test_kiro_partial_read_is_retried(tmp_path):
     _write_chunk(Path(plan["chunks"][0]["output"]), doc.resolve(), lines=2)
     res = run_graphify("kiro", "finalize", cwd=tmp_path)
     assert res.returncode == 0, res.stdout + res.stderr
-    assert "lecture partielle" in res.stdout
+    assert "partial read" in res.stdout
     res = run_graphify("kiro", "prepare", ".", "--update", cwd=tmp_path)
-    assert "1 a extraire" in res.stdout
+    assert "1 to extract" in res.stdout
 
 
 def test_kiro_verify_passes():
     res = subprocess.run([sys.executable, "-m", "graphify", "kiro", "verify"], capture_output=True, text=True)
     assert res.returncode == 0, res.stdout + res.stderr
-    assert "verification reussie" in res.stdout
+    assert "verification passed" in res.stdout
 
 
 # --------------------------------------------------------------------------- #

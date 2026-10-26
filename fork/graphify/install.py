@@ -189,7 +189,7 @@ def _always_on(basename: str) -> str:
         # only by an install/integration path that actually needs this block.
         raise RuntimeError(
             f"graphify install is incomplete: missing always-on block '{basename}' "
-            f"at {path}. Reinstallez le bundle interne graphify."
+            f"at {path}. Reinstall the internal graphify bundle."
         ) from exc
 def _platform_skill_destination(platform_name: str, *, project: bool = False, project_dir: Path | None = None) -> Path:
     """Return the skill destination for a platform and scope."""
@@ -1300,8 +1300,8 @@ def _kiro_install(project_dir: Path) -> None:
         print(f"  .kiro/steering/graphify.md  ->  always-on steering {action}")
 
     print()
-    print("Kiro interrogera le graphe de connaissances avant chaque conversation.")
-    print("Utilisez /graphify dans Kiro pour construire ou mettre a jour le graphe.")
+    print("Kiro will query the knowledge graph before each conversation.")
+    print("Use /graphify in Kiro to build or update the graph.")
 def _kiro_uninstall(project_dir: Path) -> None:
     """Remove graphify skill + steering file for Kiro."""
     project_dir = project_dir or Path(".")

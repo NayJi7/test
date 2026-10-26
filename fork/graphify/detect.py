@@ -598,7 +598,7 @@ def extract_pdf_text(path: Path) -> str:
             _pypdf_missing_warned = True
             print(
                 "[graphify] WARNING: PDF text extraction skipped: 'pypdf' is not "
-                "installed. Reinstallez le bundle interne graphify (option pdf incluse).",
+                "installed. Reinstall the internal graphify bundle (pdf option included).",
                 file=sys.stderr,
             )
         return ""
@@ -2193,8 +2193,7 @@ def detect(root: Path, *, follow_symlinks: bool | None = None, google_workspace:
                 if not google_workspace:
                     skipped_sensitive.append(
                         str(p)
-                        + " [raccourci Google Workspace ignore (version locale) - "
-                        "or set GRAPHIFY_GOOGLE_WORKSPACE=1]"
+                        + " [Google Workspace shortcut skipped (export disabled in this build)]"
                     )
                     continue
                 try:
@@ -2231,7 +2230,7 @@ def detect(root: Path, *, follow_symlinks: bool | None = None, google_workspace:
                     total_words += _wc(md_path)
                 else:
                     # Conversion failed (library not installed) - skip with note
-                    skipped_sensitive.append(str(p) + " [conversion Office impossible - reinstallez le bundle interne graphify]")
+                    skipped_sensitive.append(str(p) + " [Office conversion unavailable - reinstall the internal graphify bundle]")
                 continue
             files[ftype].append(str(p))
             if ftype != FileType.VIDEO:

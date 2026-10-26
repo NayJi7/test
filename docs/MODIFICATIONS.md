@@ -302,6 +302,11 @@ Le skill d'origine faisait exécuter à l'agent une quinzaine de blocs
   autres assistants, `--backend`, `--model`, `--postgres`, `--google-workspace`,
   `--global`, `--push`, options propres aux appels LLM). `export neo4j` et
   `export falkordb` y sont décrits comme écrivant seulement un fichier Cypher.
+- **Langue** : l'aide et tous les messages de la ligne de commande (fonctions
+  désactivées, verrou anti-fuite, `graphify kiro …`) sont en anglais, comme
+  graphify d'origine. Restent en français : le skill, le steering et les
+  références Kiro, les missions des sous-agents (`chunk_NN.task.md`),
+  l'installeur, les `.cmd`/`.sh`, les README et cette documentation.
 - **Messages** : retrait de « Tip: set GEMINI_API_KEY… » après
   `graphify update`, et des renvois à `graphify label` (refusé dans ce fork),
   remplacés par `/graphify --update` dans Kiro.
@@ -427,12 +432,13 @@ Le skill d'origine faisait exécuter à l'agent une quinzaine de blocs
   - Même comparaison sous **Python 3.10.7** (la version de vos postes) :
     origine 7 440 réussis / 718 échecs ; fork 6 111 réussis / 702 échecs ;
     **0 nouvel échec** une fois classés 2 tests qui lancent eux-mêmes `python -c`.
-  - 13 fichiers ne sont plus collectés (module supprimé) et 905 tests sont
+  - 13 fichiers ne sont plus collectés (module supprimé) et 908 tests sont
     marqués « skip ». Chacun a sa raison dans `tests/conftest.py` et
     `tests/local_skips.json` : 508 fonctions retirées, 152 intégrations
     d'autres assistants, 71 extractions par IA, 154 tests qui lancent
     eux-mêmes `git init`, `bash`, `node` ou `python -m build` (refusés par le
-    verrou), et 20 messages ou textes modifiés.
+    verrou), 20 messages ou textes modifiés, et 3 tests qui vérifiaient la
+    présence de commandes désormais retirées de `--help`.
   - J'ai vérifié que **aucun** blocage du verrou ne venait du code de
     graphify : tous viennent de la préparation des tests.
   - `test_security.py` a été adapté (tests de `safe_fetch` retirés) : 52/52.
@@ -442,6 +448,7 @@ Le skill d'origine faisait exécuter à l'agent une quinzaine de blocs
   Windows) : suite complète relancée sous Python 3.10.7 et comparée test par
   test au rapport précédent : **0 nouvel échec** (6 108 réussis, 710 échecs
   déjà présents sur l'origine, 924 ignorés).
+  Relancée après le passage des messages en anglais : **0 nouvel échec**.
 - **Dossier portable, Linux (Python 3.10.7)** : installation (≈ 18 s),
   `kiro verify` 15/15, banc anti-fuite **36/36** sur le lanceur du dossier ;
   hooks dans un vrai dépôt git : reconstruction après commit, puis à nouveau

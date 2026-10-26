@@ -103,7 +103,7 @@ def _spec_path() -> Path:
 
 
 def _die(msg: str, code: int = 1) -> None:
-    print(f"[graphify kiro] erreur : {msg}", file=sys.stderr)
+    print(f"[graphify kiro] error: {msg}", file=sys.stderr)
     sys.exit(code)
 
 
@@ -223,15 +223,15 @@ def cmd_prepare(argv: list[str]) -> None:
             deep = argv[i + 1] == "deep"
             i += 1
         elif a.startswith("--"):
-            _die(f"option inconnue : {a}")
+            _die(f"unknown option: {a}")
         else:
             paths.append(a)
         i += 1
     if len(paths) > 1:
-        _die("un seul dossier a la fois.")
+        _die("one folder at a time.")
     root = Path(paths[0] if paths else ".").resolve()
     if not root.is_dir():
-        _die(f"dossier introuvable : {root}")
+        _die(f"folder not found: {root}")
 
     out_dir = out_path()
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -249,7 +249,7 @@ def cmd_prepare(argv: list[str]) -> None:
         deleted = list(inc.get("deleted_files", []) or [])
         detection = inc
         if not inc.get("new_total", 0) and not deleted:
-            print("[graphify kiro] aucun fichier modifie depuis la derniere construction : rien a faire.")
+            print("[graphify kiro] no file changed since the last build: nothing to do.")
             return
     else:
         detection = detect(root, extra_excludes=excludes, gitignore=gitignore)
@@ -258,30 +258,30 @@ def cmd_prepare(argv: list[str]) -> None:
         deleted = []
 
     # Rapport de detection
-    print(f"[graphify kiro] corpus : {detection.get('total_files', 0)} fichiers, "
-          f"~{detection.get('total_words', 0):,} mots ({root})")
+    print(f"[graphify kiro] corpus: {detection.get('total_files', 0)} files, "
+          f"~{detection.get('total_words', 0):,} words ({root})")
     for t in ("code", "document", "paper", "image", "video"):
         n = len(work_files.get(t, []))
         if n:
-            print(f"  {t:9s}: {n} fichier(s) {'a traiter' if update else ''}".rstrip())
+            print(f"  {t:9s}: {n} file(s) {'to process' if update else ''}".rstrip())
     secrets = detection.get("secret_findings", []) or []
     if secrets:
         by_file: dict[str, list[str]] = {}
         for s in secrets:
             by_file.setdefault(s["file"], []).append(f"{s['rule']} l.{s['line']}")
-        print(f"[graphify kiro] {len(by_file)} document(s) EXCLU(S) car ils contiennent un secret probable "
-              "(ils ne seront jamais lus par un sous-agent) :")
+        print(f"[graphify kiro] {len(by_file)} document(s) EXCLUDED because they contain a likely secret "
+              "(they will never be read by a sub-agent):")
         for f, rules in sorted(by_file.items()):
-            print(f"  - {f} : {', '.join(rules[:5])}")
-        print("  -> retirez le secret du document, ou faites approuver ce fichier par un humain "
-              "dans .graphify-secrets-allow (voir la documentation).")
+            print(f"  - {f}: {', '.join(rules[:5])}")
+        print("  -> remove the secret from the document, or have a human approve this file "
+              "in .graphify-secrets-allow (see the documentation).")
     sensitive = [s for s in detection.get("skipped_sensitive", []) if s not in {str(root / x['file']) for x in secrets}]
     if sensitive:
-        print(f"[graphify kiro] {len(sensitive)} fichier(s) ignores (nom sensible ou format non pris en charge).")
+        print(f"[graphify kiro] {len(sensitive)} file(s) skipped (sensitive name or unsupported format).")
     videos = work_files.get("video", [])
     if videos:
-        print(f"[graphify kiro] {len(videos)} fichier(s) audio/video ignores : la transcription n'est pas "
-              "disponible dans cette version de graphify. Deposez une transcription .txt/.md a la place.")
+        print(f"[graphify kiro] {len(videos)} audio/video file(s) skipped: transcription is not "
+              "available in this graphify build. Add a .txt/.md transcript instead.")
 
     # Extraction AST (locale, sans IA)
     code_paths: list[Path] = []
@@ -290,7 +290,7 @@ def cmd_prepare(argv: list[str]) -> None:
         code_paths.extend(collect_files(p) if p.is_dir() else [p])
     if code_paths:
         ast = extract(code_paths, cache_root=root, root=root)
-        print(f"[graphify kiro] code : {len(ast.get('nodes', []))} noeuds, {len(ast.get('edges', []))} aretes (AST local)")
+        print(f"[graphify kiro] code: {len(ast.get('nodes', []))} nodes, {len(ast.get('edges', []))} edges (local AST)")
     else:
         ast = {"nodes": [], "edges": [], "hyperedges": [], "input_tokens": 0, "output_tokens": 0}
     write_json_atomic(state / "ast.json", ast, ensure_ascii=False)
@@ -316,7 +316,7 @@ def cmd_prepare(argv: list[str]) -> None:
         if p.suffix.lower() == ".pdf":
             side = _pdf_sidecar(p, state)
             if side is None:
-                print(f"[graphify kiro] PDF sans texte extractible, ignore : {_rel(p, root)}")
+                print(f"[graphify kiro] PDF without extractable text, skipped: {_rel(p, root)}")
                 continue
             read_path = side
         lines = 0 if kind == "image" else _line_count(read_path)
@@ -350,16 +350,16 @@ def cmd_prepare(argv: list[str]) -> None:
     write_json_atomic(state / PLAN_NAME, plan, ensure_ascii=False)
 
     hits = len(sem_files) - len(uncached)
-    print(f"[graphify kiro] documents : {len(sem_files)} au total, {hits} deja en cache, "
-          f"{len(items)} a extraire en {len(plan_chunks)} lot(s).")
+    print(f"[graphify kiro] documents: {len(sem_files)} total, {hits} already cached, "
+          f"{len(items)} to extract in {len(plan_chunks)} chunk(s).")
     if plan_chunks:
-        print("[graphify kiro] ETAPE SUIVANTE : pour chaque lot ci-dessous, lancer un sous-agent Kiro "
-              "avec la consigne : \"Execute la mission decrite dans <fichier>\".")
+        print("[graphify kiro] NEXT STEP: for each chunk below, launch a Kiro sub-agent "
+              "with the instruction: \"Execute la mission decrite dans <fichier>\".")
         for c in plan_chunks:
-            print(f"  lot {c['n']:02d} : {c['task']}  ({len(c['files'])} fichier(s))")
-        print("Puis : graphify kiro finalize")
+            print(f"  chunk {c['n']:02d}: {c['task']}  ({len(c['files'])} file(s))")
+        print("Then: graphify kiro finalize")
     else:
-        print("[graphify kiro] aucun document a faire lire : lancez directement `graphify kiro finalize`.")
+        print("[graphify kiro] no document to read: run `graphify kiro finalize` directly.")
 
 
 # --------------------------------------------------------------------------- #
@@ -369,17 +369,17 @@ def cmd_prepare(argv: list[str]) -> None:
 def _load_plan() -> dict:
     plan = _load_json(_state_dir() / PLAN_NAME)
     if not isinstance(plan, dict):
-        _die("aucune preparation trouvee : lancez d'abord `graphify kiro prepare`.")
+        _die("no preparation found: run `graphify kiro prepare` first.")
     return plan
 
 
 def cmd_status(argv: list[str]) -> None:
     plan = _load_plan()
     done = [c for c in plan["chunks"] if Path(c["output"]).is_file()]
-    print(f"[graphify kiro] {len(done)}/{len(plan['chunks'])} lot(s) ecrits.")
+    print(f"[graphify kiro] {len(done)}/{len(plan['chunks'])} chunk(s) written.")
     for c in plan["chunks"]:
-        state = "ecrit" if Path(c["output"]).is_file() else "MANQUANT"
-        print(f"  lot {c['n']:02d} : {state}")
+        state = "written" if Path(c["output"]).is_file() else "MISSING"
+        print(f"  chunk {c['n']:02d}: {state}")
 
 
 # --------------------------------------------------------------------------- #
@@ -402,7 +402,7 @@ def _strict_filter(fragment: dict, chunk: dict, root: Path) -> tuple[dict, list[
 
     extra = set(fragment) - _TOP_KEYS
     if extra:
-        notes.append(f"cles inconnues ignorees : {sorted(extra)[:5]}")
+        notes.append(f"unknown keys ignored: {sorted(extra)[:5]}")
 
     nodes_out: list[dict] = []
     node_ids: set[str] = set()
@@ -413,14 +413,14 @@ def _strict_filter(fragment: dict, chunk: dict, root: Path) -> tuple[dict, list[
         src = _src(n.get("source_file"))
         label = _clean_text(n.get("label"), MAX_LABEL_LEN)
         if not (isinstance(nid, str) and _ID_RE.match(nid)) or not label:
-            notes.append("noeud invalide ignore (id/libelle)")
+            notes.append("invalid node ignored (id/label)")
             continue
         if src is None:
-            notes.append(f"noeud {nid!r} ignore : source_file hors du lot")
+            notes.append(f"node {nid!r} ignored: source_file outside the chunk")
             continue
         rationale = _clean_text(n.get("rationale"), MAX_RATIONALE_LEN)
         if _is_suspicious(label, rationale):
-            notes.append(f"noeud {nid!r} ecarte : contenu ressemblant a une instruction ou une commande")
+            notes.append(f"node {nid!r} dropped: content looks like an instruction or a command")
             continue
         clean = {
             "id": nid,
@@ -436,7 +436,7 @@ def _strict_filter(fragment: dict, chunk: dict, root: Path) -> tuple[dict, list[
         if rationale:
             clean["rationale"] = rationale
         if set(n) - _NODE_KEYS:
-            notes.append(f"noeud {nid!r} : champs inconnus retires")
+            notes.append(f"node {nid!r}: unknown fields removed")
         nodes_out.append(clean)
         node_ids.add(nid)
 
@@ -448,11 +448,11 @@ def _strict_filter(fragment: dict, chunk: dict, root: Path) -> tuple[dict, list[
         if not (isinstance(s, str) and _ID_RE.match(s) and isinstance(t, str) and _ID_RE.match(t)):
             continue
         if not (isinstance(rel, str) and _RELATION_RE.match(rel)):
-            notes.append("arete ignoree : relation invalide")
+            notes.append("edge ignored: invalid relation")
             continue
         src = _src(e.get("source_file"))
         if src is None:
-            notes.append("arete ignoree : source_file hors du lot")
+            notes.append("edge ignored: source_file outside the chunk")
             continue
         conf = e.get("confidence") if e.get("confidence") in _CONFIDENCES else "AMBIGUOUS"
         score = e.get("confidence_score")
@@ -476,7 +476,7 @@ def _strict_filter(fragment: dict, chunk: dict, root: Path) -> tuple[dict, list[
         if not (isinstance(hid, str) and _ID_RE.match(hid) and label and len(members) >= 3 and src):
             continue
         if _is_suspicious(label):
-            notes.append(f"hyperarete {hid!r} ecartee : contenu suspect")
+            notes.append(f"hyperedge {hid!r} dropped: suspicious content")
             continue
         conf = h.get("confidence") if h.get("confidence") in ("EXTRACTED", "INFERRED") else "INFERRED"
         score = h.get("confidence_score")
@@ -513,7 +513,7 @@ def _build_outputs(extraction: dict, detection: dict, root: Path, directed: bool
 
     G = build_from_json(extraction, root=str(root), directed=directed)
     if G.number_of_nodes() == 0:
-        _die("le graphe est vide (aucun noeud extrait).")
+        _die("the graph is empty (no node extracted).")
     communities = cluster(G)
     cohesion = score_all(G, communities)
     gods = god_nodes(G)
@@ -525,8 +525,8 @@ def _build_outputs(extraction: dict, detection: dict, root: Path, directed: bool
     questions = suggest_questions(G, communities, labels)
     wrote = to_json(G, communities, str(out_path("graph.json")), force=force, community_labels=labels)
     if not wrote:
-        _die("graph.json existant plus gros : reconstruction refusee (relancez avec --force si des "
-             "fichiers ont ete supprimes volontairement).")
+        _die("existing graph.json is larger: rebuild refused (rerun with --force if "
+             "files were deleted on purpose).")
     tokens = {"input": 0, "output": 0}
     report = generate(G, communities, cohesion, labels, gods, surprises, detection, tokens, str(root),
                       suggested_questions=questions)
@@ -542,7 +542,7 @@ def _build_outputs(extraction: dict, detection: dict, root: Path, directed: bool
     }
     if not no_viz:
         if G.number_of_nodes() > 5000:
-            print("[graphify kiro] graphe > 5000 noeuds : export HTML ignore (utilisez `graphify export html`).")
+            print("[graphify kiro] graph > 5000 nodes: HTML export skipped (use `graphify export html`).")
         else:
             from graphify.export import to_html
 
@@ -575,15 +575,15 @@ def _print_communities(G, analysis: dict) -> None:
     from graphify.security import sanitize_label
 
     comms = {int(k): v for k, v in analysis["communities"].items()}
-    print("[graphify kiro] COMMUNAUTES A NOMMER (2 a 5 mots chacune). Ecrivez un fichier JSON "
-          f"{{\"<id>\": \"<nom>\"}} dans {_state_dir() / 'labels.json'} puis lancez "
+    print("[graphify kiro] COMMUNITIES TO NAME (2 to 5 words each). Write a JSON file "
+          f"{{\"<id>\": \"<name>\"}} to {_state_dir() / 'labels.json'} then run "
           "`graphify kiro labels " + str(_state_dir() / "labels.json") + "`.")
     for cid in sorted(comms, key=lambda c: -len(comms[c]))[:200]:
         members = comms[cid]
         ranked = sorted(members, key=lambda n: -G.degree(n))[:8]
         names = [sanitize_label(str(G.nodes[n].get("label", n)))[:60] for n in ranked]
-        tag = f" [deja nomme : {analysis['labels'].get(str(cid))}]" if cid in set(analysis.get("named", [])) else ""
-        print(f"  {cid}: ({len(members)} noeuds){tag} " + " | ".join(names))
+        tag = f" [already named: {analysis['labels'].get(str(cid))}]" if cid in set(analysis.get("named", [])) else ""
+        print(f"  {cid}: ({len(members)} nodes){tag} " + " | ".join(names))
 
 
 def cmd_finalize(argv: list[str]) -> None:
@@ -610,18 +610,18 @@ def cmd_finalize(argv: list[str]) -> None:
     for c in plan["chunks"]:
         out_file = Path(c["output"])
         if not out_file.is_file():
-            print(f"[graphify kiro] lot {c['n']:02d} MANQUANT : ses fichiers seront retentes au prochain --update.")
+            print(f"[graphify kiro] chunk {c['n']:02d} MISSING: its files will be retried on the next --update.")
             missing_sources.update(f["source_file"] for f in c["files"])
             continue
         frag, errors = load_validated_semantic_fragment(out_file)
         if errors or frag is None:
             rejected += 1
-            print(f"[graphify kiro] lot {c['n']:02d} REJETE : {errors[:3]}")
+            print(f"[graphify kiro] chunk {c['n']:02d} REJECTED: {errors[:3]}")
             missing_sources.update(f["source_file"] for f in c["files"])
             continue
         clean, notes = _strict_filter(frag, c, root)
         for note in sorted(set(notes))[:8]:
-            print(f"[graphify kiro] lot {c['n']:02d} : {note}")
+            print(f"[graphify kiro] chunk {c['n']:02d}: {note}")
         new["nodes"] += clean["nodes"]
         new["edges"] += clean["edges"]
         new["hyperedges"] += clean["hyperedges"]
@@ -631,8 +631,8 @@ def cmd_finalize(argv: list[str]) -> None:
             got = clean["coverage"].get(f["source_file"])
             if got is None or got < f["lines"]:
                 partial.add(f["source_file"])
-                print(f"[graphify kiro] lecture partielle : {_rel(f['source_file'], root)} "
-                      f"({got if got is not None else '?'} / {f['lines']} lignes) - sera retente.")
+                print(f"[graphify kiro] partial read: {_rel(f['source_file'], root)} "
+                      f"({got if got is not None else '?'} / {f['lines']} lines) - will be retried.")
 
     # 2. Cache semantique (seulement pour les fichiers effectivement traites)
     uncached_ok = [s for s in plan["uncached"] if s not in missing_sources]
@@ -640,7 +640,7 @@ def cmd_finalize(argv: list[str]) -> None:
         saved = save_semantic_cache(new["nodes"], new["edges"], new["hyperedges"], root=root,
                                     allowed_source_files=uncached_ok, mode=mode,
                                     prompt_file=Path(plan["spec"]), partial_source_files=sorted(partial))
-        print(f"[graphify kiro] cache : {saved} fichier(s) enregistres.")
+        print(f"[graphify kiro] cache: {saved} file(s) saved.")
 
     # 3. Cache + nouveaux resultats
     cached = _load_json(state / "cached.json", {"nodes": [], "edges": [], "hyperedges": []})
@@ -687,7 +687,7 @@ def cmd_finalize(argv: list[str]) -> None:
             "input_tokens": 0,
             "output_tokens": 0,
         }
-        print(f"[graphify kiro] mise a jour fusionnee : {G0.number_of_nodes()} noeuds.")
+        print(f"[graphify kiro] update merged: {G0.number_of_nodes()} nodes.")
     write_json_atomic(state / "extract.json", extraction, ensure_ascii=False)
 
     # 6. Sante du graphe (lecture seule)
@@ -696,9 +696,9 @@ def cmd_finalize(argv: list[str]) -> None:
         flags = [f"{summary[k]} {k}" for k in (
             "dangling_endpoint_edges", "missing_endpoint_edges", "self_loop_edges",
         ) if summary.get(k, 0)]
-        print("[graphify kiro] sante du graphe : " + ("; ".join(flags) if flags else "OK"))
+        print("[graphify kiro] graph health: " + ("; ".join(flags) if flags else "OK"))
     except Exception as exc:  # diagnostic seulement, jamais bloquant
-        print(f"[graphify kiro] diagnostic indisponible : {exc}")
+        print(f"[graphify kiro] diagnostics unavailable: {exc}")
 
     # 7. Graphe, communautes, rapport, HTML
     detection = dict(plan.get("detection") or {})
@@ -716,10 +716,10 @@ def cmd_finalize(argv: list[str]) -> None:
 
     for c in plan["chunks"]:
         Path(c["output"]).unlink(missing_ok=True)
-    print(f"[graphify kiro] graphe : {G.number_of_nodes()} noeuds, {G.number_of_edges()} aretes, "
-          f"{len(analysis['communities'])} communautes -> {out_path()}")
+    print(f"[graphify kiro] graph: {G.number_of_nodes()} nodes, {G.number_of_edges()} edges, "
+          f"{len(analysis['communities'])} communities -> {out_path()}")
     if rejected:
-        print(f"[graphify kiro] ATTENTION : {rejected} lot(s) rejete(s) ; relancez /graphify --update.")
+        print(f"[graphify kiro] WARNING: {rejected} chunk(s) rejected; rerun /graphify --update.")
     _print_communities(G, analysis)
 
 
@@ -730,16 +730,16 @@ def cmd_finalize(argv: list[str]) -> None:
 def cmd_labels(argv: list[str]) -> None:
     files = [a for a in argv if not a.startswith("--")]
     if not files:
-        _die("usage : graphify kiro labels <fichier.json>")
+        _die("usage: graphify kiro labels <file.json>")
     data = _load_json(Path(files[0]))
     if not isinstance(data, dict):
-        _die("le fichier de noms doit etre un objet JSON {\"<id>\": \"<nom>\"}.")
+        _die("the names file must be a JSON object {\"<id>\": \"<name>\"}.")
     state = _state_dir()
     analysis = _load_json(state / "analysis.json")
     extraction = _load_json(state / "extract.json")
     plan = _load_plan()
     if not isinstance(analysis, dict) or not isinstance(extraction, dict):
-        _die("aucune construction recente : lancez `graphify kiro finalize` d'abord.")
+        _die("no recent build: run `graphify kiro finalize` first.")
     comm_ids = {int(k) for k in analysis["communities"]}
     labels = {int(k): v for k, v in analysis.get("labels", {}).items()}
     applied, refused = 0, []
@@ -775,7 +775,7 @@ def cmd_labels(argv: list[str]) -> None:
     out_path(".graphify_labels.json").write_text(
         json.dumps({str(k): v for k, v in labels.items()}, ensure_ascii=False), encoding="utf-8")
     if not to_json(G, communities, str(out_path("graph.json")), community_labels=labels):
-        _die("graph.json n'a pas pu etre reecrit (garde-fou de reduction).")
+        _die("graph.json could not be rewritten (shrink guard).")
     if out_path("graph.html").exists() and G.number_of_nodes() <= 5000:
         to_html(G, communities, str(out_path("graph.html")), community_labels=labels)
     analysis["labels"] = {str(k): v for k, v in labels.items()}
@@ -786,8 +786,8 @@ def cmd_labels(argv: list[str]) -> None:
     }, ensure_ascii=False)
     analysis["named"] = sorted(named)
     write_json_atomic(state / "analysis.json", analysis, ensure_ascii=False)
-    print(f"[graphify kiro] {applied} nom(s) applique(s)" + (f", {len(refused)} refuse(s)" if refused else "") + ".")
-    print(f"[graphify kiro] rapport : {out_path('GRAPH_REPORT.md')}")
+    print(f"[graphify kiro] {applied} name(s) applied" + (f", {len(refused)} refused" if refused else "") + ".")
+    print(f"[graphify kiro] report: {out_path('GRAPH_REPORT.md')}")
 
 
 # --------------------------------------------------------------------------- #
@@ -807,7 +807,7 @@ def cmd_verify(argv: list[str]) -> None:
         results.append((bool(ok), label))
 
     from graphify import _egress_guard
-    check(_egress_guard.installed(), "verrou anti-fuite actif dans le processus graphify")
+    check(_egress_guard.installed(), "anti-leak guard active in the graphify process")
 
     def _blocked(fn) -> bool:
         try:
@@ -818,29 +818,29 @@ def cmd_verify(argv: list[str]) -> None:
             return False
         return False
 
-    check(_blocked(lambda: socket.socket(socket.AF_INET, socket.SOCK_STREAM)), "creation de socket TCP bloquee")
-    check(_blocked(lambda: socket.getaddrinfo("example.com", 443)), "resolution DNS bloquee")
-    check(_blocked(lambda: subprocess.run(["curl", "--version"], capture_output=True)), "lancement de curl bloque")
-    check(_blocked(lambda: subprocess.run(["git", "push"], capture_output=True)), "git push bloque")
-    check(_blocked(lambda: __import__("urllib.request").request.urlopen("https://example.com")), "urllib bloque")
+    check(_blocked(lambda: socket.socket(socket.AF_INET, socket.SOCK_STREAM)), "TCP socket creation blocked")
+    check(_blocked(lambda: socket.getaddrinfo("example.com", 443)), "DNS resolution blocked")
+    check(_blocked(lambda: subprocess.run(["curl", "--version"], capture_output=True)), "launching curl blocked")
+    check(_blocked(lambda: subprocess.run(["git", "push"], capture_output=True)), "git push blocked")
+    check(_blocked(lambda: __import__("urllib.request").request.urlopen("https://example.com")), "urllib blocked")
 
     from graphify import llm
-    check(not llm.BACKENDS and llm.detect_backend() is None, "aucun backend IA dans graphify")
+    check(not llm.BACKENDS and llm.detect_backend() is None, "no AI backend in graphify")
     for mod in ("graphify.prs", "graphify.transcribe", "graphify.pg_introspect", "graphify.global_graph"):
-        check(importlib.util.find_spec(mod) is None, f"module retire : {mod}")
+        check(importlib.util.find_spec(mod) is None, f"module removed: {mod}")
     try:
         import graphify.serve as _serve
-        check(not hasattr(_serve, "_build_server"), "serveur MCP retire")
+        check(not hasattr(_serve, "_build_server"), "MCP server removed")
     except Exception:
-        check(False, "serveur MCP retire")
+        check(False, "MCP server removed")
 
     from graphify import _vendor
     for name in ("vis-network", "d3", "mermaid"):
         try:
             _vendor._vendor_source(name)
-            check(True, f"bibliotheque HTML embarquee intacte : {name}")
+            check(True, f"embedded HTML library intact: {name}")
         except Exception as exc:
-            check(False, f"bibliotheque HTML embarquee intacte : {name} ({exc})")
+            check(False, f"embedded HTML library intact: {name} ({exc})")
 
     # Informatif : bibliotheques reseau presentes dans l'environnement Python
     # (non utilisees par graphify-local ; un environnement dedie est conseille).
@@ -849,12 +849,12 @@ def cmd_verify(argv: list[str]) -> None:
 
     failed = [label for ok, label in results if not ok]
     for ok, label in results:
-        print(f"  [{'OK' if ok else 'ECHEC'}] {label}")
+        print(f"  [{'OK' if ok else 'FAIL'}] {label}")
     if extra:
-        print(f"  [INFO] bibliotheques reseau presentes dans cet environnement (non utilisees par graphify) : {', '.join(extra)}")
+        print(f"  [INFO] network libraries present in this environment (not used by graphify): {', '.join(extra)}")
     from graphify.__main__ import __version__
     print(f"[graphify kiro] graphify {__version__} : "
-          + ("verification reussie." if not failed else f"{len(failed)} controle(s) en echec."))
+          + ("verification passed." if not failed else f"{len(failed)} check(s) failed."))
     if failed:
         sys.exit(1)
 

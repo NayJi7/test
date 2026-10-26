@@ -1301,7 +1301,7 @@ def _target_is_indexed(file_path: str, root: "Path") -> bool:
         return True
 def _clone_repo(*args, **kwargs) -> Path:
     """graphify: clonage de depots distants supprime."""
-    _local_refuse("le clonage de depots distants")
+    _local_refuse("cloning remote repositories")
 
 
 def _reenter_main() -> None:
@@ -1314,16 +1314,16 @@ def _reenter_main() -> None:
 # (appel a une IA externe, telechargement, clonage, envoi vers une base,
 # serveur MCP, graphe global) est refusee ici, avant toute execution.
 _LOCAL_BLOCKED_FLAGS = {
-    "--backend": "le choix d'un backend LLM",
-    "--model": "le choix d'un modele LLM",
-    "--dedup-llm": "le dedoublonnage par LLM",
-    "--postgres": "l'introspection d'une base PostgreSQL distante",
-    "--google-workspace": "l'export Google Workspace (gws)",
-    "--global": "le graphe global partage",
-    "--push": "l'envoi vers une base Neo4j/FalkorDB",
-    "--mcp": "le serveur MCP",
-    "--neo4j-push": "l'envoi vers Neo4j",
-    "--falkordb-push": "l'envoi vers FalkorDB",
+    "--backend": "choosing an LLM backend",
+    "--model": "choosing an LLM model",
+    "--dedup-llm": "LLM deduplication",
+    "--postgres": "introspecting a remote PostgreSQL database",
+    "--google-workspace": "Google Workspace export (gws)",
+    "--global": "the shared global graph",
+    "--push": "sending to a Neo4j/FalkorDB database",
+    "--mcp": "the MCP server",
+    "--neo4j-push": "sending to Neo4j",
+    "--falkordb-push": "sending to FalkorDB",
 }
 # Commandes qui prennent un chemin de corpus : une URL y est refusee
 # (l'original clonait alors le depot GitHub).
@@ -1332,8 +1332,8 @@ _LOCAL_PATH_CMDS = {"extract", "update", "watch", "cluster-only", "label", "merg
 
 def _local_refuse(feature: str) -> None:  # ne retourne jamais (sys.exit)
     print(
-        f"graphify: fonction desactivee - {feature} "
-        "(aucune donnee ne doit quitter la machine).",
+        f"graphify: feature disabled - {feature} "
+        "(no data may leave this machine).",
         file=sys.stderr,
     )
     sys.exit(2)
@@ -1348,20 +1348,20 @@ def _local_gate(cmd: str) -> None:
     if cmd in _LOCAL_PATH_CMDS and any(
         a.lower().startswith(("http://", "https://", "git@", "ssh://")) for a in args
     ):
-        _local_refuse("le traitement d'une URL distante")
+        _local_refuse("processing a remote URL")
     if cmd == "label":
         _local_refuse(
-            "le nommage des communautes par LLM (`graphify label`) ; utilisez "
-            "`graphify kiro labels` depuis Kiro"
+            "LLM community naming (`graphify label`); use "
+            "`graphify kiro labels` from Kiro"
         )
 
 
 def dispatch_command(cmd: str) -> None:
     _local_gate(cmd)
     if cmd == "provider":
-        _local_refuse("la gestion de fournisseurs LLM (`graphify provider`)")
+        _local_refuse("managing LLM providers (`graphify provider`)")
     elif cmd == "prs":
-        _local_refuse("le tableau de bord des PR (`graphify prs`, appels GitHub via gh)")
+        _local_refuse("the PR dashboard (`graphify prs`, GitHub calls via gh)")
     elif cmd == "hook":
         from graphify.hooks import (
             install as hook_install,
@@ -2147,7 +2147,7 @@ def dispatch_command(cmd: str) -> None:
             print(format_diagnostic_report(summary))
 
     elif cmd == "add":
-        _local_refuse("la recuperation d'URL (`graphify add`)")
+        _local_refuse("fetching URLs (`graphify add`)")
 
     elif cmd == "watch":
         watch_path = Path(sys.argv[2]) if len(sys.argv) > 2 else Path(".")
@@ -2991,7 +2991,7 @@ def dispatch_command(cmd: str) -> None:
         print(f"Written to: {out_path}")
 
     elif cmd == "clone":
-        _local_refuse("le clonage de depots distants (`graphify clone`)")
+        _local_refuse("cloning remote repositories (`graphify clone`)")
 
     elif cmd == "export":
         subcmd = sys.argv[2] if len(sys.argv) > 2 else ""
@@ -3366,7 +3366,7 @@ def dispatch_command(cmd: str) -> None:
         print_benchmark(result)
 
     elif cmd == "global":
-        _local_refuse("le graphe global partage (`graphify global`, ~/.graphify/global-graph.json)")
+        _local_refuse("the shared global graph (`graphify global`, ~/.graphify/global-graph.json)")
 
     elif cmd == "extract":
         # Headless full-pipeline extraction for CI / scripts (#698).
@@ -3862,9 +3862,9 @@ def dispatch_command(cmd: str) -> None:
             # (#4361). Mirrors --code-only's report of what was held back.
             skipped = len(semantic_files)
             print(
-                f"[graphify extract] aucune IA dans graphify ; "
-                f"{skipped} fichier(s) non-code (docs/PDF/images) ignores ici, indexation du code seulement. "
-                "Pour les documents, lancez /graphify dans Kiro (`graphify kiro prepare`)."
+                f"[graphify extract] no AI in graphify; "
+                f"{skipped} non-code file(s) (docs/PDF/images) skipped here, indexing code only. "
+                "For documents, run /graphify in Kiro (`graphify kiro prepare`)."
             )
             semantic_files = []
             doc_files = []

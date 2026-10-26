@@ -2168,8 +2168,8 @@ def _neighbor_lines(G: nx.Graph, nid: str, rel_filter: str = "") -> list[str]:
 
 def _main(argv: list[str] | None = None) -> None:
     print(
-        "graphify: le serveur MCP est desactive. Utilisez "
-        "`graphify query`, `graphify path` ou `graphify explain`.",
+        "graphify: the MCP server is disabled. Use "
+        "`graphify query`, `graphify path` or `graphify explain`.",
         file=sys.stderr,
     )
     raise SystemExit(2)

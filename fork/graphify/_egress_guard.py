@@ -74,7 +74,7 @@ def installed() -> bool:
 
 def _deny(what: str) -> None:
     raise EgressBlocked(
-        f"graphify: action bloquee par le verrou anti-fuite : {what}"
+        f"graphify: blocked by the anti-leak guard: {what}"
     )
 
 
@@ -220,7 +220,7 @@ def _check_exec(executable: object, argv: object) -> None:
         return
     if _is_current_python(exe) and _python_args_allowed(args):
         return
-    _deny(f"lancement du programme {name!r} ({' '.join(args[:4])}...)")
+    _deny(f"launching program {name!r} ({' '.join(args[:4])}...)")
 
 
 def _hook(event: str, args: tuple) -> None:
@@ -228,15 +228,15 @@ def _hook(event: str, args: tuple) -> None:
         # args = (socket, family, type, proto)
         family = args[1] if len(args) > 1 else None
         if family not in (_unix_family(), -1):
-            _deny(f"creation d'une socket reseau (famille {family})")
+            _deny(f"creating a network socket (family {family})")
         return
     if event in _SOCKET_USE_EVENTS:
         sock = args[0] if args else None
         if getattr(sock, "family", None) != _unix_family():
-            _deny(f"{event} vers {args[1] if len(args) > 1 else '?'}")
+            _deny(f"{event} to {args[1] if len(args) > 1 else '?'}")
         return
     if event in _DNS_EVENTS:
-        _deny(f"resolution DNS ({event} {args[0] if args else ''})")
+        _deny(f"DNS resolution ({event} {args[0] if args else ''})")
     if event in _ALWAYS_BLOCKED_EVENTS:
         _deny(event)
     if event == "subprocess.Popen":
@@ -289,7 +289,7 @@ def _check_windows_create_process(caller) -> None:
                     and _is_current_python(argv[0]) and _python_args_allowed(argv[:-1])
                     and (exe is None or _is_current_python(exe))):
                 return
-    _deny(f"CreateProcess depuis {filename or '?'}")
+    _deny(f"CreateProcess from {filename or '?'}")
 
 
 def install() -> None:

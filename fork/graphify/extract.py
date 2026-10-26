@@ -9464,7 +9464,7 @@ def extract(
         if _extra and _DEP_MISSING_MARKER in _err_text:
             # Genuinely absent optional extra — point the user at the install.
             _reason = _err_text.split(". ")[0]
-            _hint = f' Option [{_extra}] absente de cette installation : reinstallez le bundle interne graphify.'
+            _hint = f' Option [{_extra}] is missing from this installation: reinstall the internal graphify bundle.'
             _cause = "a dependency is missing"
         else:
             # Either no known extra, or the grammar is present but failed to

@@ -64,8 +64,8 @@ def _vendor_source(name: str) -> str:
     digest = base64.b64encode(hashlib.sha384(data).digest()).decode("ascii")
     if digest != expected:
         raise VendorIntegrityError(
-            f"graphify: empreinte inattendue pour {filename} "
-            f"(attendu sha384-{expected}, obtenu sha384-{digest})"
+            f"graphify: unexpected digest for {filename} "
+            f"(expected sha384-{expected}, got sha384-{digest})"
         )
     text = data.decode("utf-8")
     # Neutralise les sequences qui pourraient fermer ou perturber un <script>
