@@ -21,7 +21,7 @@ if errorlevel 1 (
   echo Echec de l'installation par pip.
   goto :fin
 )
-%PY% -m graphify kiro verify
+%PY% -m graphify verify
 if errorlevel 1 (
   echo Auto-controle en echec : ne pas utiliser cette installation.
   goto :fin

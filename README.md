@@ -1,7 +1,7 @@
 # graphify-local
 
-Fork de graphify (`graphifyy` 0.9.93) sans aucune sortie de données, intégré à
-Kiro par un skill.
+Fork de graphify (`graphifyy` 0.9.93) sans aucune sortie de données, utilisable
+depuis n'importe quel assistant IA (Kiro, Claude Code, Codex…) par son skill.
 
 | Dossier | Contenu |
 |---|---|

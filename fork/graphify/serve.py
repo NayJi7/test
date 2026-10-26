@@ -2161,8 +2161,8 @@ def _neighbor_lines(G: nx.Graph, nid: str, rel_filter: str = "") -> list[str]:
 
 # graphify-local: le serveur MCP (stdio et HTTP/SSE) est supprime.
 # Il exposait aussi des outils PR qui contactaient GitHub via `gh`, et son
-# transport HTTP n'avait pas d'authentification par defaut. Kiro interroge le
-# graphe uniquement par la ligne de commande (`graphify query/path/explain`).
+# transport HTTP n'avait pas d'authentification par defaut. Les assistants
+# interrogent le graphe par la ligne de commande (`graphify query/path/explain`).
 # Seules les fonctions de requete locales ci-dessus sont conservees.
 
 

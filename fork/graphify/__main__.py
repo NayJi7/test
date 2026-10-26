@@ -225,7 +225,7 @@ def _check_skill_version(skill_dst: Path, platform_names: "list[str] | None" = N
             print(
                 f"  warning: skill is from graphify {installed}, but the package is "
                 f"{__version__} (older). Upgrade the package "
-                f"(reinstall the internal graphify bundle); "
+                f"(reinstall the internal graphify-local package); "
                 f"running 'graphify install' would downgrade the skill.",
                 file=sys.stderr,
             )
@@ -843,13 +843,13 @@ def _run_cli() -> None:
         # A package upgrade leaves every installed skill at the old version;
         # refresh them first, so the check below only fires for copies the
         # refresh could not or must not touch (#1805).
-        # graphify-local: pas de reecriture automatique des skills installes
-        # (un SKILL.md durci ne doit jamais etre remplace par celui du paquet).
+        if not _informational:
+            _refresh_stale_skills()
+            _refresh_v1_opencode_plugins()
         # Resolve each platform's real user-scope destination so per-platform
         # overrides (gemini, opencode, devin, antigravity, amp) check the dir
         # they actually install into, not the bare cfg['skill_dst'].
-        # graphify-local: seul l'emplacement du skill Kiro est verifie.
-        for skill_dst in {_platform_skill_destination(name) for name in _skill_platforms() if name == "kiro"}:
+        for skill_dst in {_platform_skill_destination(name) for name in _skill_platforms()}:
             _check_skill_version(skill_dst)
 
     if len(sys.argv) >= 2 and sys.argv[1] in ("-v", "--version", "version"):
@@ -861,7 +861,7 @@ def _run_cli() -> None:
         print("Usage: graphify <command>")
         print()
         print("Commands:")
-        print("  install --platform kiro same as `graphify kiro install`")
+        print("  install [--platform P]  copy skill to platform config dir (claude|windows|codebuddy|codex|opencode|aider|amp|agents|claw|droid|trae|trae-cn|gemini|cursor|antigravity|hermes|kiro|pi|devin)")
         print("  uninstall               remove graphify from all detected platforms in one shot")
         print("    --purge                 also delete graphify-out/ directory")
         print("  path \"A\" \"B\"            shortest path between two nodes in graph.json")
@@ -941,7 +941,7 @@ def _run_cli() -> None:
         print("    --max-children N        cap children per node (default 200)")
         print("    --top-k-edges N         per-symbol outbound edges in inspector (default 12)")
         print("    --label NAME            project label in header")
-        print("  extract <path>          headless code extraction (local AST) for CI/scripts; documents are read by Kiro (/graphify)")
+        print("  extract <path>          headless code extraction (local AST) for CI/scripts; documents are read by your AI assistant (/graphify)")
         print("    --force                 full re-scan and re-dispatch: skip the incremental")
         print("                            manifest gate and semantic cache reads (env: GRAPHIFY_FORCE=1)")
         print("    --max-workers N         AST extraction subprocess count (default: cpu_count)")
@@ -961,14 +961,75 @@ def _run_cli() -> None:
         print("  export graphml          emit GraphML [--graph PATH]")
         print("  export neo4j            emit a Cypher file for Neo4j [--graph PATH]")
         print("  export falkordb         emit a Cypher file for FalkorDB [--graph PATH]")
+        print("  verify                  self-check: anti-leak guard active, network and external programs blocked")
         print("  hook install            install post-commit/post-checkout/post-merge/post-rewrite git hooks (all platforms)")
         print("  hook uninstall          remove git hooks")
         print("  hook status             check if git hooks are installed")
         print(
+            "  gemini install          write GEMINI.md section + BeforeTool hook (Gemini CLI)"
+        )
+        print("  gemini uninstall        remove GEMINI.md section + BeforeTool hook")
+        print("  cursor install          write .cursor/rules/graphify.mdc (Cursor)")
+        print("  cursor uninstall        remove .cursor/rules/graphify.mdc")
+        print("  claude install          write graphify section to CLAUDE.md + PreToolUse hook (Claude Code)")
+        print("  claude uninstall        remove graphify section from CLAUDE.md + PreToolUse hook")
+        print("  codebuddy install       write graphify section to CODEBUDDY.md + PreToolUse hook (CodeBuddy)")
+        print("  codebuddy uninstall     remove graphify section from CODEBUDDY.md + PreToolUse hook")
+        print("  codex install           write graphify section to AGENTS.md (Codex)")
+        print("  codex uninstall         remove graphify section from AGENTS.md")
+        print(
+            "  opencode install        write graphify section to AGENTS.md + tool.execute.before plugin (OpenCode)"
+        )
+        print(
+            "  opencode uninstall      remove graphify section from AGENTS.md + plugin"
+        )
+        print(
+            "  kilo install            install native Kilo skill + command + AGENTS.md + .kilo plugin"
+        )
+        print(
+            "  kilo uninstall          remove native Kilo skill + command + AGENTS.md + .kilo plugin"
+        )
+        print("  aider install           write graphify section to AGENTS.md (Aider)")
+        print("  aider uninstall         remove graphify section from AGENTS.md")
+        print(
+            "  copilot install         copy graphify skill to ~/.copilot/skills (GitHub Copilot CLI)"
+        )
+        print("  copilot uninstall       remove graphify skill from ~/.copilot/skills")
+        print(
+            "  vscode install          configure VS Code Copilot Chat (skill + .github/copilot-instructions.md)"
+        )
+        print("  vscode uninstall        remove VS Code Copilot Chat configuration")
+        print(
+            "  claw install            write graphify section to AGENTS.md (OpenClaw)"
+        )
+        print("  claw uninstall          remove graphify section from AGENTS.md")
+        print(
+            "  droid install           write graphify section to AGENTS.md (Factory Droid)"
+        )
+        print("  droid uninstall        remove graphify section from AGENTS.md")
+        print("  trae install            write graphify section to AGENTS.md (Trae)")
+        print("  trae uninstall         remove graphify section from AGENTS.md")
+        print("  trae-cn install         write graphify section to AGENTS.md (Trae CN)")
+        print("  trae-cn uninstall      remove graphify section from AGENTS.md")
+        print(
+            "  antigravity install     write .agents/rules + .agents/workflows + skill (Google Antigravity)"
+        )
+        print(
+            "  antigravity uninstall   remove .agents/rules, .agents/workflows, and skill"
+        )
+        print(
+            "  hermes install          write skill to ~/.hermes/skills/graphify/ (Hermes)"
+        )
+        print("  hermes uninstall        remove skill from ~/.hermes/skills/graphify/")
+        print(
             "  kiro install            write skill to .kiro/skills/graphify/ + steering file (Kiro IDE/CLI)"
         )
         print("  kiro uninstall          remove skill + steering file")
-        print()
+        print("  pi install              write skill to ~/.pi/agent/skills/graphify/ (Pi coding agent)")
+        print("  pi uninstall            remove skill from ~/.pi/agent/skills/graphify/")
+        print("  pi guard path           print the guard package path (register it with `pi install <path>`)")
+        print("  devin install           write skill to ~/.config/devin/skills/graphify/ (Devin CLI)")
+        print("  devin uninstall         remove skill from ~/.config/devin/skills/graphify/")
         print()
         return
 
@@ -983,42 +1044,11 @@ def _run_cli() -> None:
         print(f"Run 'graphify --help' for full usage.")
         return
 
-    # graphify-local: seul Kiro est pris en charge. Les skills des autres
-    # assistants (Claude Code, Codex, Gemini CLI, Cursor...) contiennent des
-    # instructions d'installation depuis PyPI et d'envoi vers des IA externes ;
-    # ils ne sont pas livres et leur installation est refusee.
-    # graphify-local: pipeline de construction pilote par Kiro
-    # (`graphify kiro prepare|status|finalize|labels`).
-    from graphify import kiro_pipeline as _kiro_pipeline
-    if _kiro_pipeline.is_pipeline_command(sys.argv):
-        _kiro_pipeline.main(sys.argv)
+    # graphify-local: auto-controle de l'installation (verrou anti-fuite).
+    if cmd == "verify":
+        from graphify import _selfcheck
+        _selfcheck.main(sys.argv[2:])
         return
-    _other_platforms = {
-        "claude", "windows", "codebuddy", "codex", "opencode", "kilo", "aider",
-        "copilot", "vscode", "claw", "droid", "trae", "trae-cn", "antigravity",
-        "hermes", "pi", "devin", "gemini", "cursor", "amp", "agents",
-    }
-    if cmd in _other_platforms:
-        print(
-            f"graphify: the '{cmd}' integration is disabled; only Kiro "
-            "is supported (`graphify kiro install`).",
-            file=sys.stderr,
-        )
-        sys.exit(2)
-    if cmd == "install":
-        _plat = None
-        for _i, _a in enumerate(sys.argv[2:]):
-            if _a.startswith("--platform="):
-                _plat = _a.split("=", 1)[1]
-            elif _a == "--platform" and len(sys.argv) > _i + 3:
-                _plat = sys.argv[_i + 3]
-        if _plat != "kiro":
-            print(
-                "graphify: only the Kiro platform is supported; "
-                "use `graphify kiro install` (or `graphify install --platform kiro`).",
-                file=sys.stderr,
-            )
-            sys.exit(2)
     if dispatch_install_cli(cmd):
         return
     dispatch_command(cmd)

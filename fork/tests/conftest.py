@@ -21,8 +21,6 @@ _HERE = Path(__file__).parent
 # Fichier -> raison (module / ressource supprime(e) dans graphify-local)
 COLLECT_IGNORE = {
     "test_backend_extras.py": "graphify.llm : indications d'installation des backends IA retirees",
-    "test_claude_md.py": "integration Claude Code (always_on/claude-md.md) retiree",
-    "test_install_strings.py": "skills/always-on des autres assistants retires",
     "test_hyperedge_member_shapes.py": "graphify.llm._sanitize_fragment (reponses LLM) retire",
     "test_semantic_fragment_sanitize.py": "graphify.llm._parse_llm_json/_sanitize_fragment retires",
     "test_injection_sentinel_coverage.py": "graphify.llm (enveloppe <untrusted_source> des appels API) retire",

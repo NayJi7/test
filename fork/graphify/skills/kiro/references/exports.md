@@ -1,25 +1,59 @@
-# Reference graphify : exports
+# graphify reference: extra exports and benchmark
 
-Tous les exports sont des fichiers LOCAUX ecrits dans `graphify-out/`. Aucun
-export n'envoie de donnees vers un service ou une base distante.
+Load this when the user passed one of the export flags (`--wiki`, `--neo4j`, `--falkordb`, `--svg`, `--graphml`), or when the corpus is large enough for the token-reduction benchmark. Each step runs only for its own flag.
+
+### Step 6b - Wiki (only if --wiki flag)
+
+**Only run this step if `--wiki` was explicitly given in the original command.**
+
+Run this before Step 9 (cleanup) so `.graphify_labels.json` is still available.
 
 ```bash
-graphify export html            # graph.html interactif (bibliotheque embarquee, aucune requete reseau)
-graphify export obsidian        # coffre Obsidian dans graphify-out/obsidian (option --dir <chemin>)
-graphify export wiki            # wiki markdown (index + un article par communaute)
-graphify export svg             # graph.svg
-graphify export graphml         # graph.graphml (Gephi, yEd)
-graphify export callflow-html   # diagrammes d'architecture Mermaid (bibliotheque embarquee)
-graphify export neo4j           # graphify-out/cypher.txt, a importer soi-meme dans une base INTERNE
-graphify tree                   # GRAPH_TREE.html, vue arborescente (d3 embarque)
+graphify export wiki
 ```
 
-Non disponible : `--push` vers Neo4j/FalkorDB, serveur MCP (`--mcp`). Ces
-options sont refusees par graphify.
+### Step 7 - Neo4j export (only if --neo4j flag)
 
-Les pages HTML generees portent une politique de securite (CSP) qui interdit
-au navigateur tout chargement externe : elles s'ouvrent hors ligne.
+**If `--neo4j`** - generate a Cypher file for manual import:
 
-Ne partagez ces fichiers que par les canaux internes autorises pour le niveau
-de confidentialite du graphe : ils contiennent des noms et des resumes issus
-du corpus.
+```bash
+graphify export neo4j
+```
+
+Sending the graph to a Neo4j server (`--neo4j-push`) is **not available** in this build: graphify-local never sends data over the network. Import `graphify-out/cypher.txt` yourself (e.g. `cypher-shell < graphify-out/cypher.txt`).
+
+### Step 7a - FalkorDB export (only if --falkordb flag)
+
+**If `--falkordb`** - generate a Cypher file. The statements are OpenCypher, but FalkorDB's `GRAPH.QUERY` runs one statement at a time (no bulk script import like Neo4j's `cypher-shell`), so load the file statement by statement:
+
+```bash
+graphify export falkordb
+```
+
+Sending the graph to a FalkorDB server (`--falkordb-push`) is **not available** in this build: graphify-local never sends data over the network.
+
+### Step 7b - SVG export (only if --svg flag)
+
+```bash
+graphify export svg
+```
+
+### Step 7c - GraphML export (only if --graphml flag)
+
+```bash
+graphify export graphml
+```
+
+### Step 7d - MCP server
+
+The MCP server (`--mcp`, `python -m graphify.serve`) is **not available** in this build (graphify-local). Query the graph with `graphify query`, `graphify path` and `graphify explain` instead (see `references/query.md`).
+
+### Step 8 - Token reduction benchmark (only if total_words > 5000)
+
+If `total_words` from `graphify-out/.graphify_detect.json` is greater than 5,000, run:
+
+```bash
+graphify benchmark
+```
+
+Print the output directly in chat. If `total_words <= 5000`, skip silently - the graph value is structural clarity, not token compression, for small corpora.

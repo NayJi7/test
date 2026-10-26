@@ -1,4 +1,4 @@
-# graphify-local: module LLM neutralise (mode "Kiro uniquement").
+# graphify-local: module LLM neutralise.
 #
 # Dans graphify d'origine, ce module envoyait le corpus (documents, PDF, images,
 # noms de communautes) a des fournisseurs d'IA externes (Gemini, Kimi, Anthropic,
@@ -6,8 +6,8 @@
 # automatiquement selon les variables d'environnement presentes.
 #
 # Dans graphify-local, graphify n'appelle AUCUNE IA. L'extraction semantique
-# des documents et le nommage des communautes sont faits par l'agent Kiro via la
-# commande `graphify kiro ...` et le skill Kiro. Ce module ne conserve que des
+# des documents et le nommage des communautes sont faits par l'assistant IA qui
+# pilote graphify (skill /graphify et ses sous-agents). Ce module ne conserve que des
 # fonctions locales pures (texte du prompt d'extraction, marqueurs de lecture
 # partielle, tampon d'origine semantique) et des bouchons qui refusent tout appel.
 #
@@ -18,8 +18,8 @@ from graphify.file_slice import unit_path
 
 DISABLED_MESSAGE = (
     "graphify: no LLM backend is available. Semantic extraction and "
-    "community naming go through Kiro only "
-    "(/graphify in Kiro, `graphify kiro prepare|finalize|labels` commands)."
+    "community naming are done by your AI assistant "
+    "(/graphify skill), never by graphify itself."
 )
 
 
@@ -192,7 +192,7 @@ def backend_disabled_by_env() -> bool:
 
 
 def detect_backend_with_source() -> "tuple[str | None, str]":
-    return None, "no LLM backend (Kiro only)"
+    return None, "no LLM backend (graphify-local)"
 
 
 def detect_backend() -> str | None:
@@ -249,13 +249,13 @@ def generate_community_labels(G, communities, *args, quiet: bool = False, **kwar
 
     L'appelant (cluster-only) conserve alors ses libelles deterministes
     (noeud le plus connecte de chaque communaute). Les vrais noms sont poses
-    par l'agent Kiro via `graphify kiro labels`.
+    par l'assistant IA (etape de nommage du skill /graphify).
     """
     if not quiet:
         import sys
         print(
             "[graphify label] no LLM naming; "
-            "deterministic labels kept (final names via `graphify kiro labels`).",
+            "deterministic labels kept (your AI assistant names communities in /graphify).",
             file=sys.stderr,
         )
     return _placeholder_community_labels(communities), "placeholder"

@@ -1351,8 +1351,8 @@ def _local_gate(cmd: str) -> None:
         _local_refuse("processing a remote URL")
     if cmd == "label":
         _local_refuse(
-            "LLM community naming (`graphify label`); use "
-            "`graphify kiro labels` from Kiro"
+            "LLM community naming (`graphify label`); your AI assistant "
+            "names the communities when it runs /graphify"
         )
 
 
@@ -2337,7 +2337,7 @@ def dispatch_command(cmd: str) -> None:
                 print(
                     f"[graphify] warning: {'/'.join(_ignored_label_flags)} ignored: "
                     f"reusing saved labels at {labels_path}. "
-                    f"Delete the labels file to relabel (in Kiro: /graphify --update).",
+                    f"Delete the labels file to relabel (/graphify --update in your AI assistant).",
                     file=sys.stderr,
                 )
             # Reuse saved labels, but don't blindly trust them: the graph may have
@@ -2419,7 +2419,7 @@ def dispatch_command(cmd: str) -> None:
                     f"[graphify] community set changed since labeling "
                     f"({len(existing_labels)} saved labels, {len(communities)} communities now; "
                     f"renamed {changed} community(ies) by their hub). "
-                    f"To refresh the names, run /graphify --update in Kiro.",
+                    f"To refresh the names, run /graphify --update in your AI assistant.",
                     file=sys.stderr,
                 )
         elif no_label and not force_relabel:
@@ -2641,7 +2641,7 @@ def dispatch_command(cmd: str) -> None:
         # exiting silently when a hook-driven rebuild happens to be running.
         ok = _rebuild_code(watch_path, force=force, no_cluster=no_cluster, block_on_lock=True)
         if ok:
-            print("Code graph updated. For doc/paper/image changes run /graphify --update in Kiro.")
+            print("Code graph updated. For doc/paper/image changes run /graphify --update in your AI assistant.")
         else:
             print(
                 "Nothing to update or rebuild failed — check output above.",
@@ -3864,7 +3864,7 @@ def dispatch_command(cmd: str) -> None:
             print(
                 f"[graphify extract] no AI in graphify; "
                 f"{skipped} non-code file(s) (docs/PDF/images) skipped here, indexing code only. "
-                "For documents, run /graphify in Kiro (`graphify kiro prepare`)."
+                "For documents, run /graphify in your AI assistant."
             )
             semantic_files = []
             doc_files = []
@@ -3904,8 +3904,8 @@ def dispatch_command(cmd: str) -> None:
                             "(local AST, no key) and skip the non-code files.")
                 print(
                     "error: graphify-local never calls an external LLM (" + "; ".join(reasons) + "). "
-                    "Documents are read by Kiro: run /graphify in Kiro "
-                    "(graphify kiro prepare). A code-only corpus needs nothing more." + hint,
+                    "Documents are read by your AI assistant: run /graphify "
+                    "in it. A code-only corpus needs nothing more." + hint,
                     file=sys.stderr,
                 )
                 sys.exit(1)

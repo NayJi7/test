@@ -3,7 +3,7 @@
 > **Nom** : `graphify-local` est un nom **interne**, utilisé pour le dossier,
 > l'archive zip et le nom de paquet pip. Pour les utilisateurs, l'outil
 > s'appelle simplement **graphify** : la commande, les messages, le skill
-> Kiro `/graphify` et `graphify --version`. Le nom de paquet pip reste
+> `/graphify` et `graphify --version`. Le nom de paquet pip reste
 > différent de `graphifyy` pour qu'un `pip install -U graphifyy` tapé par
 > erreur ne puisse pas remplacer cette version par celle d'origine. Rien n'est
 > publié sur PyPI : la diffusion se fait par le zip interne.
@@ -12,9 +12,9 @@ Fork de **graphifyy 0.9.93** (PyPI), licence Apache-2.0 / MIT conservée
 (fichiers `LICENSE`, `LICENSE-MIT`, `NOTICE` inchangés).
 
 **Objectif unique : graphify ne doit pouvoir envoyer aucune donnée hors de la
-machine.** Kiro n'est pas modifié : aucune permission, aucun réglage, aucune
-restriction. On lui ajoute seulement un skill et un fichier de steering, comme
-le faisait graphify d'origine.
+machine.** L'assistant IA utilisé (Kiro, Claude Code, Codex…) n'est pas
+modifié : aucune permission, aucun réglage, aucune restriction. On lui ajoute
+seulement son skill et ses consignes, comme le faisait graphify d'origine.
 
 Le diff complet est dans `docs/PATCH-COMPLET.diff`, sans les bibliothèques
 JavaScript minifiées : ce sont des copies à l'identique des paquets npm, dont
@@ -29,7 +29,7 @@ les empreintes sont listées dans `fork/graphify/vendor/SOURCES.md`.
 - Le paquet d'origine compte environ 57 000 lignes de Python. Les algorithmes
   d'analyse du code (tree-sitter), de construction du graphe, de communautés
   (Leiden), de requête et d'export ne sont pas modifiés. Seuls les points de
-  sortie de données et l'intégration Kiro le sont.
+  sortie de données le sont.
 
 ## 1. Plus aucun appel à une IA externe
 
@@ -72,9 +72,9 @@ séparées, comme sans l'option.
 
 ### `graphify/cli.py` : commande `extract`
 
-Avec des documents dans le corpus, elle indexe le code seul et affiche « aucune
-IA dans graphify ; … lancez /graphify dans Kiro ». Elle ne cherche plus de clé
-d'API.
+Avec des documents dans le corpus, elle indexe le code seul et indique que les
+documents sont lus par l'assistant IA (« run /graphify in your AI assistant »).
+Elle ne cherche plus de clé d'API.
 
 ## 2. Plus aucun accès réseau
 
@@ -112,10 +112,11 @@ d'API.
 ### `cli.py` : contrôle central `_local_gate`
 
 Appelé au début de `dispatch_command`, il refuse **avant toute exécution**
-(message `graphify: fonction desactivee …`, code de sortie 2) :
+(message `graphify: feature disabled - … (disabled by the anti-leak guard).`,
+code de sortie 2) :
 
-- les commandes `provider`, `prs`, `add`, `clone`, `global`, `label` (le
-  nommage passe par `graphify kiro labels`) ;
+- les commandes `provider`, `prs`, `add`, `clone`, `global`, `label` (les
+  communautés sont nommées par l'assistant quand il exécute `/graphify`) ;
 - les options `--backend`, `--model`, `--dedup-llm`, `--postgres`,
   `--google-workspace`, `--global`, `--push`, `--mcp`, `--neo4j-push`,
   `--falkordb-push` ;
@@ -222,69 +223,106 @@ Vérifié par les tests :
 - Le filtre d'origine par nom de fichier (`.env`, `*.pem`, `id_rsa`…) est
   conservé.
 
-## 6. Pipeline de construction piloté par Kiro (`kiro_pipeline.py`, nouveau)
+## 6. Suites des assistants IA (restaurées, nettoyées)
 
-Le skill d'origine faisait exécuter à l'agent une quinzaine de blocs
-`python -c "…"` modifiables. Ils sont remplacés par des commandes fixes :
+> **Historique** : une première version ne gardait que Kiro, avec un skill
+> réécrit en français et un pipeline propre (`graphify kiro prepare`,
+> `finalize`, `labels`, `verify`, module `kiro_pipeline.py`). À votre demande,
+> cette approche est **abandonnée** : comme dans graphify d'origine,
+> `graphify kiro install` installe la suite Kiro, `graphify codex install` celle
+> de Codex, etc. `kiro_pipeline.py` est supprimé ; seul l'auto-contrôle est
+> conservé, sous le nom `graphify verify` (§ 7).
 
-| Commande | Rôle |
-|---|---|
-| `graphify kiro prepare [chemin] [--update] [--deep]` | détection (avec scan de secrets), analyse AST locale du code, cache sémantique, conversion locale des PDF en texte, lots d'au plus 20 fichiers / 6 000 lignes (gros fichiers et images seuls), **un fichier de mission par lot** (`graphify-out/kiro/chunk_NN.task.md`) |
-| `graphify kiro status` | lots écrits / manquants |
-| `graphify kiro finalize [--directed] [--no-viz] [--force]` | validation des JSON des sous-agents, cache, fusion code + documents, mise à jour incrémentale (`build_merge`), contrôle de santé, graphe, communautés, rapport, manifeste, `graph.html`, liste des communautés à nommer |
-| `graphify kiro labels fichier.json` | applique les noms choisis par Kiro, régénère rapport, `graph.json` et HTML ; les noms sont réappliqués aux mises à jour suivantes si la communauté garde le même nœud central |
-| `graphify kiro verify` | auto-contrôle de l'installation (15 contrôles) |
+**Restauré depuis l'original** : les 16 skills (`skill.md`, `skill-codex.md`,
+`skill-kiro.md`, `skill-vscode.md`, …, `skill-windows.md`), `command-kilo.md`,
+les 6 blocs `always_on/*.md`, l'extension `pi/`, et les 8 références de chacun
+des 14 assistants (`skills/<assistant>/references/*.md`). Les textes restent
+en anglais, comme l'original ; seuls les passages qui pouvaient faire sortir
+des données sont retirés ou remplacés par une courte note.
 
-**Validation stricte d'un lot** (graphify protège ses propres données) :
-- schéma déjà validé par graphify, plus les règles suivantes ;
-- clés inconnues retirées ;
-- identifiants vérifiés par une expression régulière ;
-- `source_file` obligatoirement un fichier **du lot** ;
-- libellés nettoyés (caractères de contrôle) et limités à 200 caractères ;
-- relations de la forme `[a-z_]` ;
-- confiance et score bornés ;
-- au plus 3 000 nœuds, 10 000 arêtes et 10 hyperarêtes par lot ;
-- tout élément dont le texte ressemble à une commande ou à une instruction
-  (`curl …`, `ignore previous instructions`, `<script`, …) est écarté et
-  signalé ;
-- une lecture incomplète (champ `coverage` inférieur au nombre de lignes) fait
-  retenter le fichier au prochain `--update`.
+**Retiré de chaque skill** (13 skills découpés, les monolithes aider et devin,
+et la variante PowerShell `skill-windows.md`) :
+- l'installation et la mise à jour automatiques depuis PyPI
+  (`uv tool install graphifyy`, `pip install graphifyy --break-system-packages`,
+  `pipx`…). L'étape 1 vérifie seulement que graphify est importable et
+  s'arrête sinon : « Install the internal graphify-local package (never
+  'pip install graphifyy') » ;
+- l'utilisation de Gemini ou d'une autre IA si une clé d'API est présente
+  (`extract_corpus_parallel`, astuce `GEMINI_API_KEY`) : l'extraction
+  sémantique est toujours faite par les sous-agents de l'assistant hôte, et
+  aucune clé d'API n'est lue ;
+- le clonage d'une URL GitHub, `add <url>`, la transcription vidéo/audio
+  (whisper), `--mcp`, `--neo4j-push`, `--falkordb-push` ;
+- les liens de sponsoring et vers docs.graphify.com.
 
-## 7. Skill et steering Kiro
+**Références** :
+- `transcribe.md` : remplacé par une note (transcription indisponible ;
+  ajouter une transcription `.txt` ou `.md`) ;
+- `add-watch.md` : section `add` retirée, `--watch` conservé ;
+- `github-and-merge.md` : clonage retiré, fusion de plusieurs dossiers
+  conservée ;
+- `exports.md` : envois Neo4j/FalkorDB et MCP remplacés par une note ;
+- `update.md` : les vidéos sont écartées au lieu d'être transcrites ;
+  `cluster-only` garde les noms de communautés existants et ne demande jamais
+  de noms à une IA.
 
-- **`skill-kiro.md`** (793 → 158 lignes), réécrit en français :
-  - toutes les étapes passent par `graphify kiro …` ;
-  - **retirés** : l'installation et la mise à jour automatiques depuis PyPI
-    (`uv tool install --upgrade graphifyy`, `pip install … --break-system-packages`),
-    l'utilisation automatique de Gemini, les blocs `python -c`, le clonage
-    GitHub, `add <url>`, la transcription, les envois Neo4j/FalkorDB, MCP et le
-    lien de sponsoring ;
-  - **aucune règle ne limite Kiro**. Le skill indique seulement d'utiliser le
-    bundle interne plutôt que `graphifyy` de PyPI, qui n'a pas les protections.
-- **`always_on/kiro-steering.md`** : traduit, même rôle (interroger le graphe
-  d'abord).
-- **`skills/kiro/references/`** :
-  - `extraction-spec.md` réécrit : règles du JSON, pas de secret recopié,
-    libellés courts ;
-  - `query.md`, `exports.md` et `hooks.md` réécrits ;
-  - `add-watch.md`, `github-and-merge.md`, `transcribe.md` et `update.md`
-    supprimés.
-- **Retiré à votre demande**, pour ne pas toucher à Kiro : une politique
-  `managed-settings.json` et un sous-agent restreint `graphify-extractor` que
-  j'avais préparés.
+**Autres fichiers** : `always_on/antigravity-rules.md` ne mentionne plus les
+outils MCP ; `install.py` n'écrit plus la configuration MCP d'Antigravity
+(`uv run --with graphifyy … graphify.serve`).
+
+**Hooks des assistants** (Claude Code, Codex, Gemini, CodeBuddy, plugins
+OpenCode et Kilo, extension Pi) : ils n'appellent que `graphify hook-guard` /
+`graphify hook-check`, en local, et aucun ne contacte le réseau (vérifié dans
+le code des plugins).
+
+**Vérifié** :
+- installation de chaque assistant (23 plateformes, globale et `--project`,
+  plus les 21 sous-commandes `graphify <assistant> install`) : 432 fichiers
+  écrits, analysés à la recherche de `pip install graphifyy`, `uv tool`,
+  `GEMINI_API_KEY`, `extract_corpus_parallel`, `--mcp`, `git clone`,
+  `yt-dlp`, `whisper`… : ces mots n'apparaissent que dans les notes qui
+  expliquent qu'ils sont indisponibles ;
+- tests de sécurité d'origine sur les skills (chemin d'entrée hostile,
+  substitution par accents graves) : **193/193** sur les skills nettoyés.
+
+**Conséquence** : les JSON écrits par les sous-agents passent par la
+validation d'origine de graphify (`validate.py`). La validation renforcée du
+pipeline Kiro (clés inconnues retirées, texte ressemblant à une commande
+écarté, limites de taille par lot) n'existe plus.
+
+## 7. `graphify verify` (`_selfcheck.py`, nouveau)
+
+Ancien `graphify kiro verify`. Lancé dans un processus graphify, il vérifie
+15 points et sort avec le code 1 si l'un échoue :
+- verrou anti-fuite actif ; création de socket TCP, DNS, `curl`, `git push` et
+  urllib bloqués ;
+- aucun fournisseur d'IA dans graphify ;
+- modules `prs`, `transcribe`, `pg_introspect` et `global_graph` absents ;
+  serveur MCP absent ;
+- bibliothèques HTML embarquées (vis-network, d3, mermaid) intactes.
+
+Il signale aussi, pour information, les bibliothèques réseau présentes dans
+l'environnement Python (`openai`, `requests`…), que graphify n'utilise pas.
+`install-pip.cmd` le lance à la fin de l'installation.
 
 ## 8. Intégration et nettoyage
 
-- **`__main__.py`** :
-  - routage de `graphify kiro prepare|status|finalize|labels|verify` ;
-  - les intégrations des autres assistants (claude, codex, gemini, cursor…)
-    sont refusées ;
-  - `graphify install` n'est accepté qu'avec `--platform kiro` ;
-  - plus de réécriture automatique des skills installés ;
-  - avertissements de version limités au skill Kiro.
-- **`install.py`** : messages traduits, publicités app.graphify.com retirées.
-  `graphify kiro install` écrit uniquement le skill, ses références et le
-  steering.
+- **`__main__.py`** (repris de l'original, puis modifié) :
+  - version lue sur la distribution `graphify-local` ; message « reinstall
+    the internal graphify-local package » ;
+  - route `graphify verify` ;
+  - toutes les intégrations d'assistants sont disponibles, comme dans
+    l'original ;
+  - **rafraîchissement automatique des skills installés** conservé, comme
+    dans l'original : après une mise à jour de graphify-local, les skills déjà
+    installés sont réécrits au lancement suivant de `graphify` ;
+  - aide : commandes et options refusées retirées (voir ci-dessous) ;
+    publicité app.graphify.com retirée.
+- **`install.py`** : publicités app.graphify.com retirées, configuration MCP
+  d'Antigravity retirée. `graphify pi guard install|uninstall` ne lance plus
+  le programme `pi` (refusé par le verrou) : la commande affiche
+  `pi install <chemin>` à lancer soi-même et sort avec le code 2.
+  `graphify pi guard path` est conservé.
 - **`hooks.py`** :
   - suppression de la sonde qui exécutait l'interpréteur indiqué dans
     `graphify-out/.graphify_python` (fichier commitable par un tiers). Seuls
@@ -293,35 +331,29 @@ Le skill d'origine faisait exécuter à l'agent une quinzaine de blocs
     dans le site-packages du Python. Quand `graphify hook install` est lancé
     depuis ce dossier (reconnu à son `graphify-local.json`), les hooks
     reçoivent le chemin de `graphify-local/lib` (`_GFY_LIB`) et l'exportent
-    dans `PYTHONPATH`. Si le dossier a été déplacé depuis, ils le retrouvent à
-    côté du `graphify` du PATH. Le pilote de fusion de `graph.json` appelle le
-    `graphify.exe` du dossier. `graphify hook status` ignore cette valeur
-    figée, comme celle de l'interpréteur.
+    dans `PYTHONPATH`. Ce code reste mais est **inactif** avec l'installation
+    par pip (aucun `graphify-local.json`).
 - **Aide (`graphify --help`)** : les commandes et options refusées n'y
-  figurent plus (clone, add, label, prs, provider, global, intégrations des
-  autres assistants, `--backend`, `--model`, `--postgres`, `--google-workspace`,
-  `--global`, `--push`, options propres aux appels LLM). `export neo4j` et
-  `export falkordb` y sont décrits comme écrivant seulement un fichier Cypher.
-- **Langue** : l'aide et tous les messages de la ligne de commande (fonctions
-  désactivées, verrou anti-fuite, `graphify kiro …`) sont en anglais, comme
-  graphify d'origine. Restent en français : le skill, le steering et les
-  références Kiro, les missions des sous-agents (`chunk_NN.task.md`),
-  l'installeur, les `.cmd`/`.sh`, les README et cette documentation.
+  figurent plus (clone, add, label, prs, provider, global, `pi guard
+  install|uninstall`, `--backend`, `--model`, `--postgres`,
+  `--google-workspace`, `--global`, `--push`, options propres aux appels LLM).
+  `export neo4j` et `export falkordb` y sont décrits comme écrivant seulement
+  un fichier Cypher. Ajout de `verify`.
+- **Langue** : l'aide et les messages de la ligne de commande sont en
+  anglais, comme graphify d'origine ; les skills et leurs références gardent
+  le texte anglais d'origine. Restent en français : les `.cmd`, les README et
+  cette documentation.
 - **Messages** : retrait de « Tip: set GEMINI_API_KEY… » après
   `graphify update`, et des renvois à `graphify label` (refusé dans ce fork),
-  remplacés par `/graphify --update` dans Kiro.
+  remplacés par `/graphify --update in your AI assistant`.
 - **`cli.py`** : `_print_cloud_cta` (publicité Graphify Cloud) neutralisé.
 - **Nom de distribution** `graphify-local` (interne) : lecture de version
   (`__main__.py`, `install.py`, `export.py`, `cache.py`). Messages d'aide
-  (`extract.py`, `detect.py`, `manifest_ingest.py`) qui renvoient au bundle
+  (`extract.py`, `detect.py`, `manifest_ingest.py`) qui renvoient au paquet
   interne au lieu de `pip install graphifyy[...]`.
 - **`README.md`** du fork remplacé par une courte présentation (l'original
   décrivait l'installation depuis PyPI et le service hébergé). `PKG-INFO`
   (métadonnées générées du sdist d'origine) retiré.
-- **Fichiers supprimés** :
-  - les skills des 15 autres assistants (`skill.md`, `skill-codex.md`, …,
-    `command-kilo.md`) ;
-  - `skills/<autres>/`, les autres `always_on/*.md` et `pi/`.
 - **`pyproject.toml`** :
   - nom `graphify-local`, version `0.9.93.1` ;
   - options conservées : pdf, office, leiden, watch, svg, sql, terraform,
@@ -330,7 +362,8 @@ Le skill d'origine faisait exécuter à l'agent une quinzaine de blocs
   - options retirées : mcp, neo4j, falkordb, google, postgres, video, kimi,
     ollama, bedrock, anthropic, gemini, openai, all ;
   - point d'entrée `graphify-mcp` supprimé ;
-  - fichiers embarqués : skill Kiro, `vendor/`.
+  - fichiers embarqués : les 16 skills, `command-kilo.md`, les références,
+    `always_on/`, `pi/`, `vendor/` (comme l'original, plus `vendor/`).
 
 ## 9. Bundle (dossier `bundle/`) - cible Python 3.10 (testé avec 3.10.7)
 
@@ -423,7 +456,47 @@ Le skill d'origine faisait exécuter à l'agent une quinzaine de blocs
 
 ## 10. Tests
 
-- **`tests/test_local.py`** (nouveau, 57 tests) : verrou, commandes
+> **État actuel** (après le retour des suites de tous les assistants, Python
+> 3.10.7, sans réseau) :
+> - **`tests/test_local.py` : 66/66**. En plus des contrôles ci-dessous : les
+>   16 skills et leurs fichiers sont livrés ; aucun skill, référence ou bloc
+>   permanent ne contient d'installation depuis PyPI, d'appel à une IA externe
+>   ou d'accès réseau (hors notes d'indisponibilité) ; `graphify install
+>   --platform X --project` (12 assistants) et `graphify claude|codex|vscode|kiro
+>   install` écrivent des suites propres ; `graphify verify` réussit ;
+>   `graphify pi guard install` ne lance jamais `pi`, même présent dans le
+>   PATH ; l'aide ne contient ni commande désactivée ni publicité.
+> - **Suite d'origine** : origine 7 463 réussis, 695 échecs ou erreurs (dus à
+>   l'environnement de test), 150 ignorés ; fork 6 582 réussis, 691 échecs ou
+>   erreurs, 828 ignorés. **Les 691 échecs du fork échouent tous déjà sur
+>   l'origine : 0 nouvel échec.**
+> - 811 tests marqués « skip », chacun avec sa raison dans
+>   `tests/local_skips.json` : 376 fonctions retirées, 344 tests qui lancent
+>   eux-mêmes `git init`, `bash`, `node` ou `python -m build` (refusés par le
+>   verrou), 71 extractions par IA, 6 messages d'aide, 6 sonde
+>   `.graphify_python`, 3 `pi guard`, 2 publicité, 1 aide, 1 Google
+>   Workspace, 1 faux positif mermaid. 11 fichiers ne sont plus collectés
+>   (module supprimé, voir `tests/conftest.py`). `test_claude_md.py` et
+>   `test_install_strings.py` sont de nouveau collectés (résultats identiques
+>   à l'origine).
+> - Tests de sécurité d'origine sur les skills (chemin d'entrée hostile,
+>   substitution par accents graves), qui lancent `bash` et sont donc bloqués
+>   dans le processus de test : exécutés à part, hors de ce processus,
+>   **193/193**. Contenu du wheel vérifié à la main (équivalent de
+>   `test_wheel_packaging.py`) : les 136 fichiers de skills, références, blocs
+>   permanents et `pi/` sont présents et identiques aux sources.
+> - **Banc anti-fuite : 38/38** sur une installation neuve (Python 3.10.7,
+>   paquet pip), dont l'installation des suites Claude Code, Codex, Kiro,
+>   Gemini et Copilot et le déroulé du skill (détection, exclusion des
+>   secrets, extraction du code, graphe, rapport).
+> - **Windows (Wine, Python Windows officiel 3.10.7 neuf)** : `install-pip.cmd`
+>   (téléchargement PyPI réel), `graphify verify` 15/15, `graphify kiro
+>   install`, `graphify install --platform codex --project`, `graphify update`,
+>   refus de `graphify pi guard install`.
+>
+> Les paragraphes suivants décrivent les essais des versions précédentes.
+
+- **`tests/test_local.py`** (nouveau ; 57 tests dans la version Kiro seule) : verrou, commandes
   refusées, absence d'IA même avec des clés en environnement, secrets, HTML,
   pipeline Kiro de bout en bout (pièges compris), lecture partielle, `verify`,
   contenu du skill, `kiro install`, hooks du dossier portable, découpage des
@@ -487,12 +560,14 @@ Le skill d'origine faisait exécuter à l'agent une quinzaine de blocs
 
 ## 11. Ce qui n'est pas couvert ou pas vérifié
 
-- **Kiro** : ce qu'il lit (le graphe, les documents lus par ses sous-agents)
-  part vers son fournisseur, selon votre contrat entreprise. C'est le périmètre
-  que vous avez choisi.
-- **Lecture des images et des PDF par les sous-agents Kiro** : graphify
-  convertit les PDF en texte localement. La lecture d'images par un sous-agent
-  n'a pas été testée dans Kiro.
+- **L'assistant IA** (Kiro aujourd'hui, un autre demain) : ce qu'il lit (le
+  graphe, les documents lus par ses sous-agents) part vers son fournisseur,
+  selon votre contrat entreprise. C'est le périmètre que vous avez choisi :
+  graphify n'ajoute aucune autre destination.
+- **Skills dans les assistants réels** : les skills nettoyés ont été installés
+  et vérifiés pour chaque assistant (fichiers écrits, contenu, tests de
+  sécurité d'origine), mais pas exécutés dans Kiro, Codex ou les autres
+  assistants depuis cet environnement.
 - **Code natif** : le verrou couvre le code Python et les programmes lancés.
   Une extension C qui ferait des appels système réseau directs n'émettrait pas
   d'événement d'audit. Aucune des 67 dépendances n'est une bibliothèque

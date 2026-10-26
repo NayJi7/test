@@ -3,9 +3,10 @@
 Fork de `graphifyy` 0.9.93 qui **ne peut rien envoyer hors de la machine** :
 aucun appel à une IA externe, aucun téléchargement, aucun serveur, et un verrou
 anti-fuite actif dans chaque processus graphify. L'intelligence (lecture des
-documents, nommage des communautés) est assurée par **Kiro**, à qui graphify
-fournit un skill et des missions d'extraction. Kiro lui-même n'est ni bridé ni
-reconfiguré.
+documents, nommage des communautés) est assurée par **l'assistant IA dans
+lequel vous tapez `/graphify`** (Kiro, Claude Code, Codex, Copilot…) et par ses
+propres sous-agents : graphify ne fait jamais appel à une autre IA. L'assistant
+lui-même n'est ni bridé ni reconfiguré.
 
 ## Contenu
 
@@ -32,7 +33,7 @@ sur le poste, puis **double-cliquer sur `install-pip.cmd`**. Il lance :
 python -m pip install --require-hashes --only-binary=:all: --disable-pip-version-check --no-warn-script-location -r requirements.txt
 ```
 
-puis `python -m graphify kiro verify`, qui doit afficher « verification passed ».
+puis `python -m graphify verify`, qui doit afficher « verification passed ».
 
 - graphify-local est pris dans le fichier `.whl` local, jamais sur PyPI ;
 - les 66 dépendances sont téléchargées par pip, aux versions et empreintes
@@ -46,7 +47,7 @@ puis `python -m graphify kiro verify`, qui doit afficher « verification passed 
 Limites :
 - graphify est installé dans le Python du poste. Un `pip install graphifyy`
   (graphify d'origine) dans ce même Python l'écraserait sans prévenir ;
-  `graphify kiro verify` échoue alors. D'autres installations pip peuvent
+  `graphify verify` échoue alors. D'autres installations pip peuvent
   aussi changer les versions des dépendances ;
 - PyPI (ou le miroir) voit l'adresse IP et la liste des paquets demandés ;
 - si pip affiche « from versions: none », il ne joint pas son index (proxy,
@@ -60,38 +61,67 @@ Limites :
 post-checkout, post-merge, post-rewrite) et le pilote de fusion de
 `graph.json`. Ils utilisent le Python dans lequel graphify est installé.
 
-## 2. Brancher un projet sur Kiro
+## 2. Brancher graphify sur votre assistant IA
 
-Dans le dossier du projet :
+Comme dans graphify d'origine, chaque assistant a sa propre suite (skill
+`/graphify`, références, consignes permanentes, hook éventuel). On installe
+celle de l'assistant utilisé, et seulement celle-là :
 
-```bash
-graphify kiro install
-```
+| Assistant | Commande | Fichiers écrits |
+|---|---|---|
+| Kiro (IDE/CLI) | `graphify kiro install` (dans le projet) | `.kiro/skills/graphify/` (skill + références), `.kiro/steering/graphify.md` |
+| Claude Code | `graphify install --platform claude` puis, dans le projet, `graphify claude install` | `~/.claude/skills/graphify/`, `~/.claude/CLAUDE.md` ; dans le projet : `CLAUDE.md`, hook `PreToolUse` dans `.claude/settings.json` |
+| Codex | `graphify install --platform codex` puis, dans le projet, `graphify codex install` | `~/.codex/skills/graphify/` ; dans le projet : `AGENTS.md`, `.codex/hooks.json` |
+| GitHub Copilot CLI | `graphify copilot install` | `~/.copilot/skills/graphify/` |
+| VS Code Copilot Chat | `graphify vscode install` (dans le projet) | `~/.copilot/skills/graphify/`, `.github/copilot-instructions.md` |
+| Gemini CLI | `graphify gemini install` (dans le projet) | `~/.gemini/skills/graphify/`, `GEMINI.md`, hook dans `.gemini/settings.json` |
+| Cursor | `graphify cursor install` (dans le projet) | `.cursor/rules/graphify.mdc` |
+| Autres (OpenCode, Kilo, Aider, Amp, OpenClaw, Droid, Trae, Antigravity, Hermes, Pi, Devin, CodeBuddy…) | `graphify <assistant> install` ou `graphify install --platform <assistant>` | voir `graphify --help` |
 
-Cette commande écrit :
-- `.kiro/skills/graphify/SKILL.md` et `references/` : le skill `/graphify` ;
-- `.kiro/steering/graphify.md` : Kiro interroge le graphe avant de répondre aux questions sur le projet.
+- `graphify install --platform X` installe le skill dans le profil de
+  l'utilisateur ; ajouter `--project` pour l'installer dans le dossier courant
+  (fichiers à commiter avec le projet). `graphify <assistant> install` écrit
+  les consignes permanentes du projet (et le hook pour Claude Code, Codex et
+  Gemini) ;
+- les hooks n'appellent que `graphify hook-guard` / `graphify hook-check`, en
+  local : ils rappellent à l'assistant d'interroger le graphe avant de fouiller
+  les fichiers ;
+- Kiro : aucun réglage ni aucune permission de Kiro n'est modifié ;
+- Codex : la commande s'appelle `$graphify`, et l'extraction en parallèle
+  demande `multi_agent = true` sous `[features]` dans `~/.codex/config.toml` ;
+- Pi : graphify ne lance pas Pi lui-même (verrou anti-fuite). Pour le
+  garde-fou natif de Pi, lancer à la main `pi install <chemin>`, où
+  `<chemin>` est affiché par `graphify pi guard path` ;
+- désinstaller : `graphify <assistant> uninstall`, ou `graphify uninstall`
+  pour tous les assistants détectés ;
+- après une mise à jour de graphify-local, les skills déjà installés sont
+  rafraîchis au lancement suivant de `graphify` (comme dans l'original).
 
-Elle ne touche à aucun réglage ni aucune permission de Kiro. Ces fichiers peuvent être commités dans le dépôt du projet.
+Les skills sont ceux de graphify d'origine (en anglais), nettoyés de tout ce
+qui pouvait faire sortir des données : jamais d'installation depuis PyPI,
+aucune clé d'API lue, aucune IA externe (Gemini, API Claude…), pas de
+clonage d'URL, pas de transcription vidéo, pas de serveur MCP, pas d'envoi
+vers Neo4j/FalkorDB.
 
-## 3. Construire le graphe (dans Kiro)
+## 3. Construire le graphe (dans l'assistant)
 
-Dans Kiro, tapez `/graphify` (ou `/graphify <dossier>`). Le skill enchaîne :
+Dans l'assistant, tapez `/graphify` (ou `/graphify <dossier>` ; `$graphify`
+dans Codex). Le skill enchaîne, comme l'original :
 
-1. `graphify kiro prepare <dossier>` : détection des fichiers, analyse locale du
-   code, exclusion des documents contenant un secret, découpage des documents
-   en lots, écriture d'une mission par lot (`graphify-out/kiro/chunk_NN.task.md`) ;
-2. Kiro lance un sous-agent par lot (« Exécute la mission décrite dans … ») ;
-3. `graphify kiro finalize` : validation stricte des JSON écrits par les
-   sous-agents, assemblage du graphe, communautés, rapport, `graph.html` ;
-4. Kiro nomme les communautés puis lance `graphify kiro labels …`.
+1. détection des fichiers et exclusion des documents contenant un secret ;
+2. analyse locale du code (tree-sitter, sans IA) ;
+3. lecture des documents, PDF et images par **les sous-agents de l'assistant
+   lui-même** (un lot de fichiers par sous-agent) ;
+4. assemblage du graphe, communautés, rapport `GRAPH_REPORT.md` et
+   `graph.html` dans `graphify-out/` ;
+5. nommage des communautés par l'assistant.
 
-Mise à jour : `/graphify --update`. Le code seul se met aussi à jour sans Kiro :
-`graphify update .` ou les hooks git (`graphify hook install`).
+Mise à jour : `/graphify --update`. Le code seul se met aussi à jour sans
+assistant : `graphify update .` ou les hooks git (`graphify hook install`).
 
 ## 4. Interroger
 
-Kiro le fait de lui-même grâce au fichier de steering. À la main :
+L'assistant le fait de lui-même grâce aux consignes installées. À la main :
 
 ```bash
 graphify query "qui travaille sur la facturation ?"
@@ -102,7 +132,7 @@ graphify explain "Client"
 ## 5. Vérifier à tout moment
 
 ```bash
-graphify kiro verify                                   # auto-contrôle de l'installation
+graphify verify                                        # auto-contrôle de l'installation
 python3 -I tests-fuite/bench.py $(which graphify)      # banc anti-fuite complet (Linux, strace)
 ```
 
@@ -130,12 +160,18 @@ diff, puis relancez le banc anti-fuite.
 
 ## Documents qui contiennent un secret
 
-`graphify kiro prepare` liste les documents écartés (règle et numéro de ligne,
-jamais la valeur). Ils n'entrent pas dans le graphe. Si c'est un faux positif,
+`/graphify` affiche la liste des documents écartés. Le détail (règle et numéro
+de ligne, jamais la valeur) est dans `secret_findings` de
+`graphify-out/.graphify_detect.json`. Ces documents n'entrent pas dans le
+graphe et ne sont jamais proposés aux sous-agents. Si c'est un faux positif,
 un humain peut approuver **cette version exacte** du fichier :
 
 ```bash
 echo "$(sha256sum docs/fichier.md | cut -d' ' -f1)  docs/fichier.md" >> .graphify-secrets-allow
+```
+
+```powershell
+"$((Get-FileHash docs\fichier.md).Hash.ToLower())  docs/fichier.md" | Add-Content .graphify-secrets-allow
 ```
 
 Toute modification ultérieure du fichier invalide l'approbation.

@@ -7,7 +7,7 @@ donc transmis tel quel a l'extraction semantique.
 
 Ce module lit le texte des documents (docs, PDF, conversions Office) avant
 toute extraction. Un fichier qui contient un secret probable est retire du
-corpus (il ne sera jamais propose aux sous-agents Kiro) et signale dans
+corpus (il ne sera jamais propose aux sous-agents de l'assistant) et signale dans
 ``skipped_sensitive`` et ``secret_findings`` (chemin, regle, numero de ligne ;
 jamais la valeur du secret).
 

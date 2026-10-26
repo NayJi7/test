@@ -2242,7 +2242,7 @@ def detect(root: Path, *, follow_symlinks: bool | None = None, google_workspace:
     # graphify-local : scan du CONTENU des documents a la recherche de
     # secrets (mots de passe, cles d'API, jetons, cles privees...). Un document
     # suspect est retire du corpus avant toute extraction semantique (il ne
-    # sera donc jamais lu par un sous-agent Kiro) et signale ci-dessous.
+    # sera donc jamais lu par un sous-agent de l'assistant) et signale ci-dessous.
     from graphify.secret_scan import load_allowlist as _load_secret_allow, scan_file as _scan_secrets
     secret_findings: list[dict] = []
     _secret_allow = _load_secret_allow(root)

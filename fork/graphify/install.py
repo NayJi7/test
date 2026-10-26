@@ -1300,8 +1300,8 @@ def _kiro_install(project_dir: Path) -> None:
         print(f"  .kiro/steering/graphify.md  ->  always-on steering {action}")
 
     print()
-    print("Kiro will query the knowledge graph before each conversation.")
-    print("Use /graphify in Kiro to build or update the graph.")
+    print("Kiro will now read the knowledge graph before every conversation.")
+    print("Use /graphify to build or update the graph.")
 def _kiro_uninstall(project_dir: Path) -> None:
     """Remove graphify skill + steering file for Kiro."""
     project_dir = project_dir or Path(".")
@@ -1371,16 +1371,6 @@ def _antigravity_install(project_dir: Path) -> None:
     print()
     print("Antigravity will now check the knowledge graph before answering")
     print("codebase questions. Run /graphify first to build the graph.")
-    print()
-    print(
-        "To enable full MCP architecture navigation, add this to ~/.gemini/antigravity/mcp_config.json:"
-    )
-    print('  "graphify": {')
-    print('    "command": "uv",')
-    print(
-        '    "args": ["run", "--with", "graphifyy", "--with", "mcp", "-m", "graphify.serve", "${workspace.path}/graphify-out/graph.json"]'
-    )
-    print("  }")
 def _antigravity_uninstall(project_dir: Path, *, project: bool = False) -> None:
     """Remove graphify Antigravity rules, workflow, and skill files."""
     # Remove rules file
@@ -2700,15 +2690,12 @@ def dispatch_install_cli(cmd: str) -> bool:
             if sys.argv[3] == "path":
                 print(package_path)
                 return True
-            pi = shutil.which("pi")
-            if not pi:
-                print("error: install Pi (pi) and add it to PATH first", file=sys.stderr)
-                sys.exit(1)
-            import subprocess
+            # graphify-local: graphify ne lance pas de programme externe (verrou
+            # anti-fuite) ; l'utilisateur enregistre lui-meme le paquet dans Pi.
             verb = "install" if sys.argv[3] == "install" else "remove"
-            result = subprocess.run([pi, verb, str(package_path)], check=False)
-            if result.returncode:
-                sys.exit(result.returncode)
+            from graphify.cli import _local_refuse
+            print(f"Register the guard package yourself: pi {verb} {package_path}", file=sys.stderr)
+            _local_refuse("running Pi (`pi install` / `pi remove`) from graphify")
         else:
             print("Usage: graphify pi [install|uninstall] | graphify pi guard [install|uninstall|path]", file=sys.stderr)
             sys.exit(1)
