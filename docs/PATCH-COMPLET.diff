@@ -1972,7 +1972,7 @@ diff -ruN '--exclude=*.min.js' upstream/graphify/callflow_html.py fork/graphify/
  </style>
 diff -ruN '--exclude=*.min.js' upstream/graphify/cli.py fork/graphify/cli.py
 --- upstream/graphify/cli.py	2026-10-20 16:29:51.089923400 +0000
-+++ fork/graphify/cli.py	2026-10-26 09:57:55.614436087 +0000
++++ fork/graphify/cli.py	2026-10-26 10:11:42.999397537 +0000
 @@ -112,36 +112,9 @@
  
  
@@ -2102,7 +2102,7 @@ diff -ruN '--exclude=*.min.js' upstream/graphify/cli.py fork/graphify/cli.py
 +def _local_refuse(feature: str) -> None:  # ne retourne jamais (sys.exit)
 +    print(
 +        f"graphify: feature disabled - {feature} "
-+        "(no data may leave this machine).",
++        "(disabled by the anti-leak guard).",
 +        file=sys.stderr,
 +    )
 +    sys.exit(2)

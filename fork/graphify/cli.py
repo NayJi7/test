@@ -1333,7 +1333,7 @@ _LOCAL_PATH_CMDS = {"extract", "update", "watch", "cluster-only", "label", "merg
 def _local_refuse(feature: str) -> None:  # ne retourne jamais (sys.exit)
     print(
         f"graphify: feature disabled - {feature} "
-        "(no data may leave this machine).",
+        "(disabled by the anti-leak guard).",
         file=sys.stderr,
     )
     sys.exit(2)
