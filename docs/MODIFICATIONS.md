@@ -297,6 +297,11 @@ Le skill d'origine faisait exécuter à l'agent une quinzaine de blocs
     côté du `graphify` du PATH. Le pilote de fusion de `graph.json` appelle le
     `graphify.exe` du dossier. `graphify hook status` ignore cette valeur
     figée, comme celle de l'interpréteur.
+- **Aide (`graphify --help`)** : les commandes et options refusées n'y
+  figurent plus (clone, add, label, prs, provider, global, intégrations des
+  autres assistants, `--backend`, `--model`, `--postgres`, `--google-workspace`,
+  `--global`, `--push`, options propres aux appels LLM). `export neo4j` et
+  `export falkordb` y sont décrits comme écrivant seulement un fichier Cypher.
 - **Messages** : retrait de « Tip: set GEMINI_API_KEY… » après
   `graphify update`, et des renvois à `graphify label` (refusé dans ce fork),
   remplacés par `/graphify --update` dans Kiro.

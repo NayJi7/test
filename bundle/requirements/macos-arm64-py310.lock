@@ -12,7 +12,7 @@ et-xmlfile==2.0.0 \
 fonttools==4.65.0 \
     --hash=sha256:93a73af2075036d36d7fbf856779c56a1b3b86ffcdae6abede7596604c42c156
 graphify-local==0.9.93.1 \
-    --hash=sha256:8daa872ec279cd2f507c37303cf578252293210b3aaa71a62a72a0031f2ebee9
+    --hash=sha256:27f0543266a3cb997c22201ae242816ec819495d58c322524465880361e38ecc
 graspologic-native==1.3.1 \
     --hash=sha256:72200aa468481d78d5b26735030c98f4a9e3388930c93043e1c01ef9fb2a0a62
 jieba-py==0.46.12 \
