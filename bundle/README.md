@@ -67,6 +67,33 @@ Limites :
   l'installation et dans `README.txt` (≈ 140 caractères), sauf si les
   chemins longs sont activés sur le poste.
 
+### Variante légère : installation par pip (Windows)
+
+Le dossier `paquet-pip/` (ou le zip `graphify-local-<version>-pip.zip`,
+≈ 2,3 Mo) contient seulement trois fichiers : le paquet graphify-local
+(`.whl`), `requirements.txt` et `install-pip.cmd`. Double-cliquer sur
+`install-pip.cmd` lance :
+
+```
+python -m pip install --require-hashes --only-binary=:all: --disable-pip-version-check --no-warn-script-location -r requirements.txt
+```
+
+puis `python -m graphify kiro verify`.
+
+- graphify-local est pris dans le fichier `.whl` local (jamais sur PyPI) ;
+  les 66 dépendances sont téléchargées par pip depuis PyPI (ou le miroir
+  configuré dans `pip.ini`), aux versions et empreintes sha256 figées : tout
+  fichier différent est refusé, et rien n'est installé ;
+- la commande `graphify` est créée dans le dossier `Scripts` de ce Python
+  (affiché à la fin), comme pour tout `pip install` ; les hooks git
+  fonctionnent normalement ;
+- prérequis : pip présent dans le Python 3.10, accès à PyPI ou à un miroir ;
+- limites par rapport au dossier portable : graphify est installé dans le
+  Python du poste. Un `pip install graphifyy` (graphify d'origine) dans ce
+  même Python l'écraserait sans prévenir ; `graphify kiro verify` échoue
+  alors. D'autres installations pip peuvent aussi changer les versions des
+  dépendances. PyPI voit l'adresse IP et la liste des paquets demandés.
+
 ### Hooks git
 
 `graphify hook install` fonctionne avec ce dossier : les hooks retrouvent

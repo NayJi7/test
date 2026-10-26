@@ -380,6 +380,16 @@ Le skill d'origine faisait exécuter à l'agent une quinzaine de blocs
     stratégie de groupe, erreur WinError 1260 ; puis `graphify.cmd`, sans
     hooks). Si un ancien `%LOCALAPPDATA%\graphify\graphify.cmd` existe,
     l'installeur le signale (il ne le supprime pas).
+- **Variante légère par pip** (`install-pip.cmd`, `scripts/make-pip-zip.py`,
+  dossier `paquet-pip/`, zip ≈ 2,3 Mo) : le wheel graphify-local et un
+  `requirements.txt` (le `.lock` Windows, où graphify-local pointe sur le
+  fichier local). `pip install --require-hashes --only-binary=:all:`
+  télécharge les dépendances depuis PyPI. Testé : Linux (Python 3.10.7,
+  pip 22.2.2, téléchargement PyPI réel, `kiro verify` réussi ; un wheel
+  modifié est refusé et rien n'est installé) et Windows sous Wine (Python
+  Windows 3.10.7, pip 22.2.2, téléchargement PyPI réel des paquets Windows,
+  `kiro verify`, `graphify.exe` du dossier Scripts, `update` et
+  `hook install` réussis).
 - **`build_bundle.py`** (Python, fonctionne sous Windows, Linux et macOS ;
   `build-bundle.sh` n'est plus qu'une enveloppe) : reconstruction sur une
   machine connectée. Options : `--python` (défaut 3.10.7) et `--only <système>`
